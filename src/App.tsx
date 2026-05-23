@@ -4,6 +4,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useTrades } from "./hooks/useTrades";
 import type { Trade } from "./hooks/useTrades";
 import Auth from "./components/Auth";
+import { useAIUsage } from "./hooks/useAIUsage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AIResult {
@@ -826,39 +827,27 @@ function Sidebar({
           marginBottom: 28,
         }}
       >
-        <div
+        <img
+          src="/favicon.png"
+          alt="TradeIntel Logo"
           style={{
             width: 34,
             height: 34,
-            background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-            borderRadius: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 16,
-            fontWeight: 900,
-            color: "#fff",
-            flexShrink: 0,
+            objectFit: "contain",
+            filter: "drop-shadow(0 0 6px rgba(59,130,246,0.5))",
           }}
-        >
-          T
-        </div>
+        />
         {!collapsed && (
-          <div>
-            <div
-              style={{
-                color: C.text,
-                fontWeight: 800,
-                fontSize: 15,
-                letterSpacing: -0.5,
-              }}
-            >
-              TradeIntel
-            </div>
-            <div style={{ color: C.muted, fontSize: 9 }}>
-              Your AI Trading Intelligence
-            </div>
-          </div>
+          <img
+            src="/logo_2.png"
+            alt="TradeIntel Logo Name"
+            style={{
+              width: 150,
+              height: 34,
+              objectFit: "contain",
+              filter: "drop-shadow(0 0 6px rgba(59,130,246,0.5))",
+            }}
+          />
         )}
       </div>
       {NAV.map((n) => (
@@ -1536,11 +1525,15 @@ function AIPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AIResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [weeklyUsed, setWeeklyUsed] = useState(0);
-  const [totalUsed, setTotalUsed] = useState(0);
-  const WEEKLY_LIMIT = 3,
-    TOTAL_LIMIT = 12;
-  const locked = weeklyUsed >= WEEKLY_LIMIT || totalUsed >= TOTAL_LIMIT;
+  const {
+    weeklyUsed,
+    totalUsed,
+    isLocked,
+    incrementUsage,
+    WEEKLY_LIMIT,
+    TOTAL_LIMIT,
+  } = useAIUsage();
+  const locked = isLocked;
 
   const METHODS: { id: MethodType; label: string; sub: string }[] = [
     { id: "scalping", label: "Scalping", sub: "Short-term quick trades" },
@@ -1571,14 +1564,10 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: buildPrompt() }],
-        }),
+        body: JSON.stringify({ prompt: buildPrompt() }),
       });
       const data = await res.json();
       const text: string =
@@ -1588,8 +1577,7 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
         text.replace(/```json|```/g, "").trim(),
       );
       setResult(parsed);
-      setWeeklyUsed((w) => w + 1);
-      setTotalUsed((t) => t + 1);
+      await incrementUsage();
     } catch {
       setError("Failed to generate analysis. Please try again.");
     }
@@ -2399,7 +2387,7 @@ function LoadingScreen() {
         fontFamily: "'Plus Jakarta Sans','Inter',sans-serif",
       }}
     >
-      <div
+      <img
         style={{
           width: 52,
           height: 52,
@@ -2412,9 +2400,9 @@ function LoadingScreen() {
           fontWeight: 900,
           color: "#fff",
         }}
-      >
-        T
-      </div>
+        src="/logo.png"
+        alt="TradeIntel Logo"
+      />
       <div style={{ color: C.muted, fontSize: 14 }}>Loading TradeIntel…</div>
     </div>
   );

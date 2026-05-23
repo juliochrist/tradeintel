@@ -72,36 +72,28 @@ export default function Auth() {
       <div style={{ width: 420, maxWidth: "90vw" }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div
+          <img
+            src="/favicon.png"
+            alt="TradeIntel Logo"
             style={{
-              width: 52,
-              height: 52,
-              background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
+              width: 75,
+              height: 75,
               borderRadius: 16,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 24,
-              fontWeight: 900,
-              color: "#fff",
               margin: "0 auto 16px",
             }}
-          >
-            T
-          </div>
-          <div
+          />
+          <img
+            src="/logo_2.png"
+            alt="TradeIntel Logo"
             style={{
               color: C.text,
-              fontSize: 24,
-              fontWeight: 800,
-              letterSpacing: -0.5,
+              width: 250,
+              height: 50,
             }}
-          >
-            TradeIntel
-          </div>
-          <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>
-            Your AI Trading Intelligence
-          </div>
+          />
         </div>
 
         {/* Card */}
