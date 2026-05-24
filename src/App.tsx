@@ -1604,22 +1604,6 @@ function AIPage() {
     { id: "breakout", label: "Breakout", sub: "Breakout Strategy" },
   ];
 
-  const buildPrompt = () => {
-    const methodMap: Record<MethodType, string> = {
-      scalping:
-        "Use scalping methodology: look for quick momentum entries, tight S/L, 1:2 R:R minimum.",
-      smc: "Use Smart Money Concepts: identify liquidity sweeps, order blocks, fair value gaps, and institutional entry zones.",
-      trend:
-        "Use trend following: identify HTF trend direction, look for pullback entries aligned with the trend.",
-      breakout:
-        "Use breakout strategy: identify key consolidation zones, enter on confirmed breakout with volume.",
-    };
-    return `You are a professional forex/crypto trader. ${methodMap[method]}
-Analyze ${pair} on ${tf} timeframe. ${notes ? `Trader notes: ${notes}` : ""}
-Respond ONLY with this exact JSON (no markdown, no extra text):
-{"bias":"buy or sell","entry":"price zone","stop_loss":"price","take_profit":"price","confidence":"low/medium/high","reason":"short explanation under 40 words"}`;
-  };
-
   const generate = async () => {
     if (isLocked) return;
     setLoading(true);
@@ -1629,19 +1613,14 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: buildPrompt() }),
+        body: JSON.stringify({ pair, timeframe: tf, method }),
       });
       const data = await res.json();
-      const text: string =
-        data.content?.find((b: { type: string }) => b.type === "text")?.text ??
-        "";
-      const parsed: AIResult = JSON.parse(
-        text.replace(/```json|```/g, "").trim(),
-      );
-      setResult(parsed);
+      if (data.error) throw new Error(data.error);
+      setResult(data);
       await incrementUsage();
-    } catch {
-      setError("Failed to generate analysis. Please try again.");
+    } catch (err: any) {
+      setError(err.message || "Failed to generate signal. Please try again.");
     }
     setLoading(false);
   };
