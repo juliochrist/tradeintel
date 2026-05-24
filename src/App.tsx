@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { useTrades } from "./hooks/useTrades";
@@ -49,19 +49,19 @@ const glass: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.05)",
 };
 
-// ─── Perf Data ────────────────────────────────────────────────────────────────
-const PERF_DATA: PerfPoint[] = [
-  { label: "May 1", value: -200 },
-  { label: "May 5", value: 150 },
-  { label: "May 8", value: 420 },
-  { label: "May 12", value: 280 },
-  { label: "May 15", value: 680 },
-  { label: "May 19", value: 950 },
-  { label: "May 22", value: 1100 },
-  { label: "May 26", value: 890 },
-  { label: "May 29", value: 1240 },
-  { label: "Jun 2", value: 1475 },
-];
+const SIDEBAR_FULL = 220;
+const SIDEBAR_MINI = 60;
+
+// ─── useIsMobile ──────────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return isMobile;
+}
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 function Sparkline({
@@ -75,9 +75,9 @@ function Sparkline({
   width?: number;
   height?: number;
 }) {
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
+  const min = Math.min(...data),
+    max = Math.max(...data),
+    range = max - min || 1;
   const pts = data
     .map(
       (v, i) =>
@@ -161,9 +161,9 @@ function DonutChart({
     cy = 50,
     stroke = 10,
     circ = 2 * Math.PI * r;
-  const winD = (win / total) * circ || 0;
-  const lossD = (loss / total) * circ || 0;
-  const beD = (be / total) * circ || 0;
+  const winD = (win / total) * circ || 0,
+    lossD = (loss / total) * circ || 0,
+    beD = (be / total) * circ || 0;
   return (
     <svg viewBox="0 0 100 100" style={{ width: "100%", height: "100%" }}>
       <circle
@@ -248,7 +248,7 @@ function StatCard({
         flexDirection: "column",
         gap: 8,
         flex: 1,
-        minWidth: 160,
+        minWidth: 150,
         position: "relative",
         overflow: "hidden",
       }}
@@ -379,13 +379,27 @@ function TradeRow({
         transition: "background 200ms",
       }}
     >
-      <td style={{ padding: "12px 16px", color: C.text, fontWeight: 600 }}>
+      <td
+        style={{
+          padding: "12px 16px",
+          color: C.text,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+        }}
+      >
         {trade.pair}
       </td>
-      <td style={{ padding: "12px 8px", color: C.muted, fontSize: 13 }}>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.muted,
+          fontSize: 13,
+          whiteSpace: "nowrap",
+        }}
+      >
         {trade.timeframe}
       </td>
-      <td style={{ padding: "12px 8px" }}>
+      <td style={{ padding: "12px 8px", whiteSpace: "nowrap" }}>
         <span
           style={{
             color: trade.direction === "Buy" ? C.success : C.danger,
@@ -402,16 +416,37 @@ function TradeRow({
           {trade.direction}
         </span>
       </td>
-      <td style={{ padding: "12px 8px", color: C.text, fontSize: 13 }}>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.text,
+          fontSize: 13,
+          whiteSpace: "nowrap",
+        }}
+      >
         {trade.entry}
       </td>
-      <td style={{ padding: "12px 8px", color: C.danger, fontSize: 13 }}>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.danger,
+          fontSize: 13,
+          whiteSpace: "nowrap",
+        }}
+      >
         {trade.sl}
       </td>
-      <td style={{ padding: "12px 8px", color: C.success, fontSize: 13 }}>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.success,
+          fontSize: 13,
+          whiteSpace: "nowrap",
+        }}
+      >
         {trade.tp}
       </td>
-      <td style={{ padding: "12px 8px" }}>
+      <td style={{ padding: "12px 8px", whiteSpace: "nowrap" }}>
         <span
           style={{
             color:
@@ -433,14 +468,22 @@ function TradeRow({
           fontWeight: 700,
           fontSize: 13,
           color: trade.profit >= 0 ? C.success : C.danger,
+          whiteSpace: "nowrap",
         }}
       >
         {trade.profit >= 0 ? "+" : ""}${Math.abs(trade.profit).toFixed(2)}
       </td>
-      <td style={{ padding: "12px 8px", color: C.muted, fontSize: 12 }}>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.muted,
+          fontSize: 12,
+          whiteSpace: "nowrap",
+        }}
+      >
         {trade.created_at.slice(0, 10)}
       </td>
-      <td style={{ padding: "12px 8px" }}>
+      <td style={{ padding: "12px 8px", whiteSpace: "nowrap" }}>
         <div style={{ display: "flex", gap: 6 }}>
           <button
             onClick={() => onEdit(trade)}
@@ -526,7 +569,7 @@ function TradeModal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 100,
+        zIndex: 200,
       }}
     >
       <div
@@ -570,112 +613,42 @@ function TradeModal({
         <div
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
         >
-          <div>
-            <label
-              style={{
-                color: C.muted,
-                fontSize: 12,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Pair
-            </label>
-            <input
-              style={inp}
-              value={form.pair}
-              onChange={(e) => set("pair", e.target.value)}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                color: C.muted,
-                fontSize: 12,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Timeframe
-            </label>
-            <input
-              style={inp}
-              value={form.timeframe}
-              onChange={(e) => set("timeframe", e.target.value)}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                color: C.muted,
-                fontSize: 12,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Entry
-            </label>
-            <input
-              style={inp}
-              type="number"
-              value={form.entry}
-              onChange={(e) => set("entry", parseFloat(e.target.value))}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                color: C.muted,
-                fontSize: 12,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Stop Loss
-            </label>
-            <input
-              style={inp}
-              type="number"
-              value={form.sl}
-              onChange={(e) => set("sl", parseFloat(e.target.value))}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                color: C.muted,
-                fontSize: 12,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Take Profit
-            </label>
-            <input
-              style={inp}
-              type="number"
-              value={form.tp}
-              onChange={(e) => set("tp", parseFloat(e.target.value))}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                color: C.muted,
-                fontSize: 12,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Profit/Loss $
-            </label>
-            <input
-              style={inp}
-              type="number"
-              value={form.profit}
-              onChange={(e) => set("profit", parseFloat(e.target.value))}
-            />
-          </div>
+          {(
+            [
+              ["Pair", "pair", "text"],
+              ["Timeframe", "timeframe", "text"],
+              ["Entry", "entry", "number"],
+              ["Stop Loss", "sl", "number"],
+              ["Take Profit", "tp", "number"],
+              ["Profit/Loss $", "profit", "number"],
+            ] as [string, keyof TradeFormData, string][]
+          ).map(([label, key, type]) => (
+            <div key={key as string}>
+              <label
+                style={{
+                  color: C.muted,
+                  fontSize: 12,
+                  display: "block",
+                  marginBottom: 6,
+                }}
+              >
+                {label}
+              </label>
+              <input
+                style={inp}
+                type={type}
+                value={form[key] as string | number}
+                onChange={(e) =>
+                  set(
+                    key,
+                    type === "number"
+                      ? parseFloat(e.target.value)
+                      : (e.target.value as TradeFormData[typeof key]),
+                  )
+                }
+              />
+            </div>
+          ))}
           <div>
             <label
               style={{
@@ -793,205 +766,245 @@ function Sidebar({
   collapsed,
   onSignOut,
   userName,
+  isMobile,
+  onClose,
 }: {
   page: PageId;
   setPage: (p: PageId) => void;
   collapsed: boolean;
   onSignOut: () => void;
   userName: string;
+  isMobile: boolean;
+  onClose: () => void;
 }) {
+  const handleNav = (id: PageId) => {
+    setPage(id);
+    if (isMobile) onClose();
+  };
+  const isHidden = isMobile ? collapsed : false;
+  const w = isMobile ? SIDEBAR_FULL : collapsed ? SIDEBAR_MINI : SIDEBAR_FULL;
+
   return (
-    <div
-      style={{
-        width: collapsed ? 60 : 220,
-        minHeight: "100vh",
-        ...glass,
-        borderRight: "1px solid rgba(255,255,255,0.05)",
-        display: "flex",
-        flexDirection: "column",
-        padding: collapsed ? "24px 10px" : "24px 16px",
-        gap: 4,
-        transition: "width 300ms",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        zIndex: 50,
-        boxSizing: "border-box",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          marginBottom: 28,
-        }}
-      >
-        <img
-          src="/favicon.png"
-          alt="TradeIntel Logo"
+    <>
+      {/* Mobile overlay */}
+      {isMobile && !collapsed && (
+        <div
+          onClick={onClose}
           style={{
-            width: 34,
-            height: 34,
-            objectFit: "contain",
-            filter: "drop-shadow(0 0 6px rgba(59,130,246,0.5))",
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 49,
           }}
         />
-        {!collapsed && (
-          <img
-            src="/logo_2.png"
-            alt="TradeIntel Logo Name"
-            style={{
-              width: 150,
-              height: 34,
-              objectFit: "contain",
-              filter: "drop-shadow(0 0 6px rgba(59,130,246,0.5))",
-            }}
-          />
-        )}
-      </div>
-      {NAV.map((n) => (
-        <button
-          key={n.id}
-          onClick={() => setPage(n.id)}
+      )}
+      <div
+        style={{
+          width: w,
+          minHeight: "100vh",
+          ...glass,
+          borderRight: "1px solid rgba(255,255,255,0.05)",
+          display: "flex",
+          flexDirection: "column",
+          padding: !isMobile && collapsed ? "24px 10px" : "24px 16px",
+          gap: 4,
+          position: "fixed",
+          top: 0,
+          left: 0,
+          zIndex: 50,
+          boxSizing: "border-box",
+          transition: "width 300ms ease, transform 300ms ease",
+          transform: isHidden ? "translateX(-100%)" : "translateX(0)",
+          overflowX: "hidden",
+        }}
+      >
+        {/* Logo */}
+        <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
-            padding: collapsed ? "10px 12px" : "10px 14px",
-            borderRadius: 12,
-            border: "none",
-            borderLeft:
-              page === n.id
-                ? `2px solid ${C.primary}`
-                : "2px solid transparent",
-            cursor: "pointer",
-            background: page === n.id ? "rgba(59,130,246,0.15)" : "transparent",
-            color: page === n.id ? C.primary : C.muted,
-            fontWeight: page === n.id ? 600 : 400,
-            fontSize: 14,
-            transition: "all 200ms",
-            outline: "none",
-            fontFamily: "inherit",
-            textAlign: "left",
+            gap: 10,
+            marginBottom: 28,
+            overflow: "hidden",
           }}
         >
-          <span style={{ fontSize: 16, flexShrink: 0 }}>{n.icon}</span>
-          {!collapsed && n.label}
-        </button>
-      ))}
-      {!collapsed && (
-        <div
-          style={{
-            marginTop: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
+          <img
+            src="/favicon.png"
+            alt="TradeIntel Logo"
+            style={{
+              width: 34,
+              height: 34,
+              objectFit: "contain",
+              filter: "drop-shadow(0 0 6px rgba(59,130,246,0.5))",
+              flexShrink: 0,
+            }}
+          />
+          {(!collapsed || isMobile) && (
+            <img
+              src="/logo_2.png"
+              alt="TradeIntel"
+              style={{
+                width: 140,
+                height: 32,
+                objectFit: "contain",
+                filter: "drop-shadow(0 0 6px rgba(59,130,246,0.5))",
+              }}
+            />
+          )}
+        </div>
+
+        {/* Nav */}
+        {NAV.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => handleNav(n.id)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: !isMobile && collapsed ? "10px 14px" : "10px 14px",
+              borderRadius: 12,
+              border: "none",
+              borderLeft:
+                page === n.id
+                  ? `2px solid ${C.primary}`
+                  : "2px solid transparent",
+              cursor: "pointer",
+              background:
+                page === n.id ? "rgba(59,130,246,0.15)" : "transparent",
+              color: page === n.id ? C.primary : C.muted,
+              fontWeight: page === n.id ? 600 : 400,
+              fontSize: 14,
+              transition: "all 200ms",
+              outline: "none",
+              fontFamily: "inherit",
+              textAlign: "left",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ fontSize: 16, flexShrink: 0 }}>{n.icon}</span>
+            {(!collapsed || isMobile) && n.label}
+          </button>
+        ))}
+
+        {/* Bottom */}
+        {(!collapsed || isMobile) && (
           <div
             style={{
-              background:
-                "linear-gradient(135deg,rgba(59,130,246,0.15),rgba(139,92,246,0.15))",
-              border: "1px solid rgba(59,130,246,0.2)",
-              borderRadius: 14,
-              padding: 14,
+              marginTop: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
             }}
           >
             <div
               style={{
-                color: C.text,
-                fontSize: 12,
-                fontWeight: 700,
-                marginBottom: 4,
+                background:
+                  "linear-gradient(135deg,rgba(59,130,246,0.15),rgba(139,92,246,0.15))",
+                border: "1px solid rgba(59,130,246,0.2)",
+                borderRadius: 14,
+                padding: 14,
               }}
             >
-              Upgrade to Pro
-            </div>
-            <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
-              Unlock unlimited AI analysis and advanced features.
-            </div>
-            <button
-              style={{
-                width: "100%",
-                background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-                border: "none",
-                borderRadius: 8,
-                color: "#fff",
-                padding: 8,
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              Upgrade Now
-            </button>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "8px 4px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div
                 style={{
-                  width: 30,
-                  height: 30,
-                  background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
+                  color: C.text,
+                  fontSize: 12,
                   fontWeight: 700,
-                  fontSize: 13,
-                  flexShrink: 0,
+                  marginBottom: 4,
                 }}
               >
-                {userName.charAt(0).toUpperCase()}
+                Upgrade to Pro
               </div>
-              <div>
-                <div style={{ color: C.text, fontSize: 12, fontWeight: 600 }}>
-                  {userName}
-                </div>
-                <div style={{ color: C.muted, fontSize: 10 }}>Free Plan</div>
+              <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
+                Unlock unlimited AI analysis and advanced features.
               </div>
+              <button
+                style={{
+                  width: "100%",
+                  background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
+                  border: "none",
+                  borderRadius: 8,
+                  color: "#fff",
+                  padding: 8,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Upgrade Now
+              </button>
             </div>
-            <button
-              onClick={onSignOut}
-              title="Sign Out"
+            <div
               style={{
-                background: "none",
-                border: "none",
-                color: C.muted,
-                cursor: "pointer",
-                fontSize: 16,
-                padding: 4,
-                fontFamily: "inherit",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 4px",
               }}
             >
-              ⏻
-            </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    flexShrink: 0,
+                  }}
+                >
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ color: C.text, fontSize: 12, fontWeight: 600 }}>
+                    {userName}
+                  </div>
+                  <div style={{ color: C.muted, fontSize: 10 }}>Free Plan</div>
+                </div>
+              </div>
+              <button
+                onClick={onSignOut}
+                title="Sign Out"
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: C.muted,
+                  cursor: "pointer",
+                  fontSize: 16,
+                  padding: 4,
+                  fontFamily: "inherit",
+                }}
+              >
+                ⏻
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
 function Topbar({
   title,
-  setCollapsed,
+  onToggleSidebar,
   onSignOut,
+  onNavigateAI,
+  userName,
 }: {
   title: string;
-  setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+  onToggleSidebar: () => void;
   onSignOut: () => void;
+  onNavigateAI: () => void;
+  userName: string;
 }) {
   return (
     <div
@@ -1011,7 +1024,7 @@ function Topbar({
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <button
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={onToggleSidebar}
           style={{
             background: "none",
             border: "none",
@@ -1019,6 +1032,7 @@ function Topbar({
             cursor: "pointer",
             fontSize: 18,
             fontFamily: "inherit",
+            padding: 4,
           }}
         >
           ☰
@@ -1029,6 +1043,7 @@ function Topbar({
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
+          onClick={onNavigateAI}
           style={{
             background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
             border: "none",
@@ -1069,11 +1084,27 @@ function Topbar({
             fontFamily: "inherit",
           }}
         >
-          J
+          {userName.charAt(0).toUpperCase()}
         </button>
       </div>
     </div>
   );
+}
+
+// ─── Build Perf Data ──────────────────────────────────────────────────────────
+function buildPerfData(trades: Trade[]): PerfPoint[] {
+  if (trades.length === 0) return [{ label: "Now", value: 0 }];
+  const sorted = [...trades].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  let cum = 0;
+  const grouped: Record<string, number> = {};
+  sorted.forEach((t) => {
+    cum += t.profit;
+    grouped[t.created_at.slice(0, 10)] = cum;
+  });
+  return Object.entries(grouped).map(([label, value]) => ({ label, value }));
 }
 
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
@@ -1085,7 +1116,14 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
   const be = trades.filter((t) => t.result === "Breakeven").length;
   const totalPnl = trades.reduce((s, t) => s + t.profit, 0);
   const winrate = total ? ((wins / total) * 100).toFixed(1) : "0.0";
-  const perfVals = PERF_DATA.map((d) => d.value);
+  const thisWeekPnl = trades
+    .filter(
+      (t) =>
+        new Date(t.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    )
+    .reduce((s, t) => s + t.profit, 0);
+  const perfData = buildPerfData(trades);
+
   const mockAI: AIResult = {
     bias: "buy",
     entry: "1945.00 – 1948.00",
@@ -1104,44 +1142,37 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
         <StatCard
           label="Total Profit"
           value={`$${totalPnl.toFixed(2)}`}
-          sub="+12.5% from last month"
-          chart={perfVals.slice(-6)}
-          subColor={C.success}
+          sub={totalPnl >= 0 ? "↑ All time" : "↓ All time"}
+          chart={perfData.map((d) => d.value).slice(-6)}
+          subColor={totalPnl >= 0 ? C.success : C.danger}
         />
         <StatCard
           label="Winrate"
           value={`${winrate}%`}
-          sub="+4.2% from last month"
+          sub={`${wins}W / ${losses}L`}
           chart={[60, 63, 61, 65, 64, parseFloat(winrate)]}
           subColor={C.success}
         />
         <StatCard
           label="Total Trades"
           value={total}
-          sub="+18 from last month"
+          sub="All time"
           chart={[80, 95, 110, 102, 118, total]}
           subColor={C.primary}
         />
         <StatCard
           label="This Week PnL"
-          value={`$${trades
-            .filter(
-              (t) =>
-                new Date(t.created_at) >
-                new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-            )
-            .reduce((s, t) => s + t.profit, 0)
-            .toFixed(2)}`}
-          sub="+8.3% from last week"
+          value={`$${thisWeekPnl.toFixed(2)}`}
+          sub="Last 7 days"
           chart={[140, 170, 155, 190, 210]}
-          subColor={C.success}
+          subColor={thisWeekPnl >= 0 ? C.success : C.danger}
         />
       </div>
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <div
           style={{
             flex: 2,
-            minWidth: 300,
+            minWidth: 280,
             ...glass,
             borderRadius: 16,
             padding: 24,
@@ -1181,7 +1212,7 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
             </div>
           </div>
           <div style={{ height: 160 }}>
-            <PerformanceChart data={PERF_DATA} />
+            <PerformanceChart data={perfData} />
           </div>
           <div
             style={{
@@ -1190,11 +1221,15 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
               marginTop: 8,
             }}
           >
-            {PERF_DATA.filter((_, i) => i % 2 === 0).map((d) => (
-              <span key={d.label} style={{ color: C.muted, fontSize: 10 }}>
-                {d.label}
-              </span>
-            ))}
+            {perfData
+              .filter(
+                (_, i) => i % Math.max(1, Math.ceil(perfData.length / 5)) === 0,
+              )
+              .map((d) => (
+                <span key={d.label} style={{ color: C.muted, fontSize: 10 }}>
+                  {d.label}
+                </span>
+              ))}
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 240 }}>
@@ -1205,7 +1240,7 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
         <div
           style={{
             flex: 2,
-            minWidth: 300,
+            minWidth: 280,
             ...glass,
             borderRadius: 16,
             padding: 20,
@@ -1363,6 +1398,7 @@ function JournalPage({
   const [filter, setFilter] = useState<FilterType>("All");
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<Trade | null | "new">(null);
+  const isMobile = useIsMobile();
 
   const filtered = trades.filter((t) => {
     if (filter !== "All" && t.result !== filter) return false;
@@ -1372,11 +1408,8 @@ function JournalPage({
   });
 
   const handleSave = async (form: TradeFormData) => {
-    if (form.id) {
-      await onUpdate(form.id, form);
-    } else {
-      await onAdd(form as Omit<Trade, "id" | "created_at">);
-    }
+    if (form.id) await onUpdate(form.id, form);
+    else await onAdd(form as Omit<Trade, "id" | "created_at">);
     setModal(null);
   };
 
@@ -1393,7 +1426,7 @@ function JournalPage({
   });
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: isMobile ? 12 : 24 }}>
       <div
         style={{
           display: "flex",
@@ -1416,21 +1449,23 @@ function JournalPage({
           ))}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search trades…"
-            style={{
-              background: C.card,
-              border: `1px solid ${C.border}`,
-              borderRadius: 10,
-              color: C.text,
-              padding: "8px 14px",
-              fontSize: 13,
-              outline: "none",
-              fontFamily: "inherit",
-            }}
-          />
+          {!isMobile && (
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search trades…"
+              style={{
+                background: C.card,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                color: C.text,
+                padding: "8px 14px",
+                fontSize: 13,
+                outline: "none",
+                fontFamily: "inherit",
+              }}
+            />
+          )}
           <button
             onClick={() => setModal("new")}
             style={{
@@ -1449,31 +1484,58 @@ function JournalPage({
           </button>
         </div>
       </div>
+
+      {/* Mobile search */}
+      {isMobile && (
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search trades…"
+          style={{
+            background: C.card,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            color: C.text,
+            padding: "8px 14px",
+            fontSize: 13,
+            outline: "none",
+            fontFamily: "inherit",
+            width: "100%",
+            marginBottom: 12,
+            boxSizing: "border-box",
+          }}
+        />
+      )}
+
+      {/* Table dengan scroll horizontal */}
       <div style={{ ...glass, borderRadius: 16, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table
+            style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}
+          >
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                 {[
                   "Pair",
-                  "Timeframe",
-                  "Direction",
+                  "TF",
+                  "Dir",
                   "Entry",
                   "SL",
                   "TP",
                   "Result",
                   "P/L",
                   "Date",
-                  "Actions",
+                  "",
                 ].map((h) => (
                   <th
                     key={h}
                     style={{
-                      padding: "12px 16px",
+                      padding: "12px 10px",
                       color: C.muted,
                       fontWeight: 600,
                       fontSize: 12,
                       textAlign: "left",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {h}
@@ -1504,6 +1566,7 @@ function JournalPage({
           </table>
         </div>
       </div>
+
       {modal !== null && (
         <TradeModal
           trade={modal === "new" ? null : modal}
@@ -1533,7 +1596,6 @@ function AIPage() {
     WEEKLY_LIMIT,
     TOTAL_LIMIT,
   } = useAIUsage();
-  const locked = isLocked;
 
   const METHODS: { id: MethodType; label: string; sub: string }[] = [
     { id: "scalping", label: "Scalping", sub: "Short-term quick trades" },
@@ -1559,7 +1621,7 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
   };
 
   const generate = async () => {
-    if (locked) return;
+    if (isLocked) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -1602,7 +1664,7 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
       <div
         style={{
           flex: 2,
-          minWidth: 300,
+          minWidth: 280,
           display: "flex",
           flexDirection: "column",
           gap: 20,
@@ -1752,7 +1814,7 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
           >
             {notes.length}/500
           </div>
-          {locked && (
+          {isLocked && (
             <div
               style={{
                 background: "rgba(239,68,68,0.1)",
@@ -1779,19 +1841,19 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
           )}
           <button
             onClick={generate}
-            disabled={loading || locked}
+            disabled={loading || isLocked}
             style={{
               width: "100%",
-              background: locked
+              background: isLocked
                 ? C.border
                 : "linear-gradient(135deg,#3B82F6,#8B5CF6)",
               border: "none",
               borderRadius: 12,
-              color: locked ? C.muted : "#fff",
+              color: isLocked ? C.muted : "#fff",
               padding: 14,
               fontSize: 15,
               fontWeight: 700,
-              cursor: locked ? "not-allowed" : "pointer",
+              cursor: isLocked ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -1802,7 +1864,34 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
             {loading ? "Analyzing…" : "✦ Generate AI Analysis"}
           </button>
         </div>
-        {result && (
+
+        {loading && (
+          <div
+            style={{
+              ...glass,
+              borderRadius: 16,
+              padding: 24,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            {[80, 40, 60, 100].map((w, i) => (
+              <div
+                key={i}
+                style={{
+                  height: 16,
+                  width: `${w}%`,
+                  background: C.border,
+                  borderRadius: 8,
+                  animation: "pulse 1.5s infinite",
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {result && !loading && (
           <div style={{ ...glass, borderRadius: 16, padding: 24 }}>
             <div
               style={{
@@ -1905,6 +1994,7 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
           </div>
         )}
       </div>
+
       <div
         style={{
           flex: 1,
@@ -2085,6 +2175,8 @@ function WeeklyPage({ trades }: { trades: Trade[] }) {
     if (t.result === "Loss") weekly[key].losses++;
     weekly[key].profit += t.profit;
   });
+  const perfData = buildPerfData(trades);
+
   return (
     <div style={{ padding: 24 }}>
       <div
@@ -2101,7 +2193,7 @@ function WeeklyPage({ trades }: { trades: Trade[] }) {
           Weekly Performance Summary
         </div>
         <div style={{ height: 200 }}>
-          <PerformanceChart data={PERF_DATA} />
+          <PerformanceChart data={perfData} />
         </div>
         <div
           style={{
@@ -2110,11 +2202,15 @@ function WeeklyPage({ trades }: { trades: Trade[] }) {
             marginTop: 8,
           }}
         >
-          {PERF_DATA.map((d) => (
-            <span key={d.label} style={{ color: C.muted, fontSize: 10 }}>
-              {d.label}
-            </span>
-          ))}
+          {perfData
+            .filter(
+              (_, i) => i % Math.max(1, Math.ceil(perfData.length / 5)) === 0,
+            )
+            .map((d) => (
+              <span key={d.label} style={{ color: C.muted, fontSize: 10 }}>
+                {d.label}
+              </span>
+            ))}
         </div>
       </div>
       {Object.keys(weekly).length === 0 && (
@@ -2179,6 +2275,7 @@ function SettingsPage({
     boxSizing: "border-box",
     fontFamily: "inherit",
   };
+
   return (
     <div style={{ padding: 24, maxWidth: 600 }}>
       <div
@@ -2387,23 +2484,30 @@ function LoadingScreen() {
         fontFamily: "'Plus Jakarta Sans','Inter',sans-serif",
       }}
     >
-      <img
+      {/* Fix 2: Logo benar-benar center */}
+      <div
         style={{
-          width: 52,
-          height: 52,
-          background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-          borderRadius: 16,
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 24,
-          fontWeight: 900,
-          color: "#fff",
+          gap: 16,
         }}
-        src="/logo.png"
-        alt="TradeIntel Logo"
-      />
-      <div style={{ color: C.muted, fontSize: 14 }}>Loading TradeIntel…</div>
+      >
+        <img
+          src="/favicon.png"
+          alt="TradeIntel Logo"
+          style={{
+            width: 100,
+            height: 100,
+            objectFit: "contain",
+            display: "block",
+          }}
+        />
+        <div style={{ color: C.muted, fontSize: 14, textAlign: "center" }}>
+          Loading TradeIntel…
+        </div>
+      </div>
     </div>
   );
 }
@@ -2413,18 +2517,33 @@ export default function App() {
   const { user, loading, signOut } = useAuth();
   const { trades, addTrade, updateTrade, deleteTrade } = useTrades();
   const [page, setPage] = useState<PageId>("dashboard");
+  const isMobile = useIsMobile();
+
+  // Fix 1: Desktop collapsed state, Mobile open/close state
+  // Desktop: false = full (220px), true = mini (60px)
+  // Mobile: false = open (overlay), true = hidden
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    // Mobile default: sidebar tertutup
+    // Desktop default: sidebar terbuka full
+    setCollapsed(isMobile ? true : false);
+  }, [isMobile]);
 
   if (loading) return <LoadingScreen />;
   if (!user) return <Auth />;
 
-  const sideW = collapsed ? 60 : 220;
   const pageTitle = NAV.find((n) => n.id === page)?.label ?? "Dashboard";
   const userName =
     (user.user_metadata?.name as string) ||
     user.email?.split("@")[0] ||
     "Trader";
   const userEmail = user.email ?? "";
+
+  // Fix 1: Margin logic
+  // Desktop: full sidebar = margin 220, mini = margin 60
+  // Mobile: konten selalu full width (sidebar overlay)
+  const mainMarginLeft = isMobile ? 0 : collapsed ? SIDEBAR_MINI : SIDEBAR_FULL;
 
   const renderPage = (): ReactNode => {
     switch (page) {
@@ -2471,28 +2590,35 @@ export default function App() {
         ::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 3px; }
         button { font-family: inherit; }
         select option { background: #111827; color: #E5E7EB; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
       `}</style>
+
       <Sidebar
         page={page}
         setPage={setPage}
         collapsed={collapsed}
         onSignOut={signOut}
         userName={userName}
+        isMobile={isMobile}
+        onClose={() => setCollapsed(true)}
       />
+
       <div
         style={{
-          marginLeft: sideW,
+          marginLeft: mainMarginLeft,
           flex: 1,
           display: "flex",
           flexDirection: "column",
           minHeight: "100vh",
-          transition: "margin-left 300ms",
+          transition: "margin-left 300ms ease",
         }}
       >
         <Topbar
           title={pageTitle}
-          setCollapsed={setCollapsed}
+          onToggleSidebar={() => setCollapsed((c) => !c)}
           onSignOut={signOut}
+          onNavigateAI={() => setPage("ai")}
+          userName={userName}
         />
         <div style={{ flex: 1, overflowY: "auto" }}>{renderPage()}</div>
       </div>
