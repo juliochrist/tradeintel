@@ -14,6 +14,11 @@ interface AIResult {
   take_profit: string;
   confidence: "low" | "medium" | "high";
   reason: string;
+  pair?: string;
+  timeframe?: string;
+  current_price?: number;
+  generated_at?: string;
+  indicators?: Record<string, unknown>;
 }
 
 interface PerfPoint {
@@ -22,10 +27,10 @@ interface PerfPoint {
 }
 
 type PageId = "dashboard" | "journal" | "ai" | "weekly" | "settings";
-type FilterType = "All" | "Win" | "Loss" | "Breakeven";
+type FilterType = "All" | "Win" | "Loss";
 type MethodType = "scalping" | "smc" | "trend" | "breakout";
-type TabType = "Short-Term" | "Weekly Analysis";
-type TradeFormData = Omit<Trade, "id" | "created_at"> & {
+
+type TradeFormData = Omit<Trade, "id" | "created_at" | "status"> & {
   id?: number;
   created_at?: string;
 };
@@ -148,12 +153,10 @@ function PerformanceChart({ data }: { data: PerfPoint[] }) {
 function DonutChart({
   win,
   loss,
-  be,
   total,
 }: {
   win: number;
   loss: number;
-  be: number;
   total: number;
 }) {
   const r = 40,
@@ -161,9 +164,8 @@ function DonutChart({
     cy = 50,
     stroke = 10,
     circ = 2 * Math.PI * r;
-  const winD = (win / total) * circ || 0,
-    lossD = (loss / total) * circ || 0,
-    beD = (be / total) * circ || 0;
+  const winD = (win / total) * circ || 0;
+  const lossD = (loss / total) * circ || 0;
   return (
     <svg viewBox="0 0 100 100" style={{ width: "100%", height: "100%" }}>
       <circle
@@ -194,17 +196,6 @@ function DonutChart({
         strokeWidth={stroke}
         strokeDasharray={`${lossD} ${circ}`}
         strokeDashoffset={-winD}
-        transform={`rotate(-90 ${cx} ${cy})`}
-      />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke={C.muted}
-        strokeWidth={stroke}
-        strokeDasharray={`${beD} ${circ}`}
-        strokeDashoffset={-(winD + lossD)}
         transform={`rotate(-90 ${cx} ${cy})`}
       />
       <text
@@ -389,22 +380,12 @@ function TradeRow({
       >
         {trade.pair}
       </td>
-      <td
-        style={{
-          padding: "12px 8px",
-          color: C.muted,
-          fontSize: 13,
-          whiteSpace: "nowrap",
-        }}
-      >
-        {trade.timeframe}
-      </td>
       <td style={{ padding: "12px 8px", whiteSpace: "nowrap" }}>
         <span
           style={{
-            color: trade.direction === "Buy" ? C.success : C.danger,
+            color: trade.side === "Buy" ? C.success : C.danger,
             background:
-              trade.direction === "Buy"
+              trade.side === "Buy"
                 ? "rgba(34,197,94,0.1)"
                 : "rgba(239,68,68,0.1)",
             borderRadius: 6,
@@ -413,8 +394,28 @@ function TradeRow({
             fontWeight: 600,
           }}
         >
-          {trade.direction}
+          {trade.side}
         </span>
+      </td>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.muted,
+          fontSize: 12,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {trade.open_date?.slice(0, 16).replace("T", " ")}
+      </td>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.muted,
+          fontSize: 12,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {trade.close_date?.slice(0, 16).replace("T", " ")}
       </td>
       <td
         style={{
@@ -429,49 +430,22 @@ function TradeRow({
       <td
         style={{
           padding: "12px 8px",
-          color: C.danger,
+          color: C.text,
           fontSize: 13,
           whiteSpace: "nowrap",
         }}
       >
-        {trade.sl}
+        {trade.exit}
       </td>
       <td
         style={{
           padding: "12px 8px",
-          color: C.success,
+          color: C.muted,
           fontSize: 13,
           whiteSpace: "nowrap",
         }}
       >
-        {trade.tp}
-      </td>
-      <td style={{ padding: "12px 8px", whiteSpace: "nowrap" }}>
-        <span
-          style={{
-            color:
-              trade.result === "Win"
-                ? C.success
-                : trade.result === "Loss"
-                  ? C.danger
-                  : C.muted,
-            fontWeight: 600,
-            fontSize: 13,
-          }}
-        >
-          {trade.result}
-        </span>
-      </td>
-      <td
-        style={{
-          padding: "12px 8px",
-          fontWeight: 700,
-          fontSize: 13,
-          color: trade.profit >= 0 ? C.success : C.danger,
-          whiteSpace: "nowrap",
-        }}
-      >
-        {trade.profit >= 0 ? "+" : ""}${Math.abs(trade.profit).toFixed(2)}
+        {trade.qty}
       </td>
       <td
         style={{
@@ -481,7 +455,45 @@ function TradeRow({
           whiteSpace: "nowrap",
         }}
       >
-        {trade.created_at.slice(0, 10)}
+        {trade.fee > 0 ? `-$${trade.fee}` : "-"}
+      </td>
+      <td
+        style={{
+          padding: "12px 8px",
+          color: C.muted,
+          fontSize: 12,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {trade.swap > 0 ? `-$${trade.swap}` : "-"}
+      </td>
+      <td
+        style={{
+          padding: "12px 8px",
+          fontWeight: 700,
+          fontSize: 13,
+          color: (trade.pnl ?? 0) >= 0 ? C.success : C.danger,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {(trade.pnl ?? 0) >= 0 ? "+" : ""}${Math.abs(trade.pnl ?? 0).toFixed(2)}
+      </td>
+      <td style={{ padding: "12px 8px", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            color: trade.status === "Win" ? C.success : C.danger,
+            background:
+              trade.status === "Win"
+                ? "rgba(34,197,94,0.1)"
+                : "rgba(239,68,68,0.1)",
+            borderRadius: 6,
+            padding: "2px 10px",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          {trade.status}
+        </span>
       </td>
       <td style={{ padding: "12px 8px", whiteSpace: "nowrap" }}>
         <div style={{ display: "flex", gap: 6 }}>
@@ -531,21 +543,38 @@ function TradeModal({
   onSave: (form: TradeFormData) => void;
   onClose: () => void;
 }) {
+  const now = new Date().toISOString().slice(0, 16);
   const [form, setForm] = useState<TradeFormData>(
-    trade ?? {
-      pair: "",
-      timeframe: "15m",
-      direction: "Buy",
-      entry: 0,
-      sl: 0,
-      tp: 0,
-      result: "Win",
-      profit: 0,
-      notes: "",
-    },
+    trade
+      ? {
+          pair: trade.pair,
+          side: trade.side,
+          open_date: trade.open_date?.slice(0, 16) || now,
+          close_date: trade.close_date?.slice(0, 16) || now,
+          entry: trade.entry,
+          exit: trade.exit,
+          qty: trade.qty,
+          fee: trade.fee,
+          swap: trade.swap,
+          pnl: trade.pnl,
+        }
+      : {
+          pair: "XAUUSD",
+          side: "Buy",
+          open_date: now,
+          close_date: now,
+          entry: 0,
+          exit: 0,
+          qty: 0.01,
+          fee: 0,
+          swap: 0,
+          pnl: 0,
+        },
   );
+
   const set = <K extends keyof TradeFormData>(k: K, v: TradeFormData[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
   const inp: CSSProperties = {
     background: C.bg,
     border: `1px solid ${C.border}`,
@@ -558,6 +587,9 @@ function TradeModal({
     boxSizing: "border-box",
     fontFamily: "inherit",
   };
+
+  const pnlVal = Number(form.pnl);
+  const pnlStatus = pnlVal >= 0 ? "Win" : "Loss";
 
   return (
     <div
@@ -578,12 +610,13 @@ function TradeModal({
           border: `1px solid ${C.border}`,
           borderRadius: 20,
           padding: 32,
-          width: 480,
+          width: 520,
           maxWidth: "90vw",
           maxHeight: "90vh",
           overflowY: "auto",
         }}
       >
+        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -610,45 +643,81 @@ function TradeModal({
             ✕
           </button>
         </div>
+
         <div
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
         >
-          {(
-            [
-              ["Pair", "pair", "text"],
-              ["Timeframe", "timeframe", "text"],
-              ["Entry", "entry", "number"],
-              ["Stop Loss", "sl", "number"],
-              ["Take Profit", "tp", "number"],
-              ["Profit/Loss $", "profit", "number"],
-            ] as [string, keyof TradeFormData, string][]
-          ).map(([label, key, type]) => (
-            <div key={key as string}>
-              <label
-                style={{
-                  color: C.muted,
-                  fontSize: 12,
-                  display: "block",
-                  marginBottom: 6,
-                }}
-              >
-                {label}
-              </label>
-              <input
-                style={inp}
-                type={type}
-                value={form[key] as string | number}
-                onChange={(e) =>
-                  set(
-                    key,
-                    type === "number"
-                      ? parseFloat(e.target.value)
-                      : (e.target.value as TradeFormData[typeof key]),
-                  )
-                }
-              />
+          {/* Symbol */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Symbol
+            </label>
+            <input
+              style={inp}
+              value={form.pair}
+              onChange={(e) => set("pair", e.target.value.toUpperCase())}
+              placeholder="XAUUSD"
+            />
+          </div>
+
+          {/* Side */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Side
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["Buy", "Sell"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => set("side", s)}
+                  style={{
+                    flex: 1,
+                    padding: "10px",
+                    borderRadius: 10,
+                    border: "none",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    fontFamily: "inherit",
+                    background:
+                      form.side === s
+                        ? s === "Buy"
+                          ? "rgba(34,197,94,0.2)"
+                          : "rgba(239,68,68,0.2)"
+                        : C.bg,
+                    color:
+                      form.side === s
+                        ? s === "Buy"
+                          ? C.success
+                          : C.danger
+                        : C.muted,
+                    outline:
+                      form.side === s
+                        ? `1px solid ${s === "Buy" ? C.success : C.danger}`
+                        : `1px solid ${C.border}`,
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
-          ))}
+          </div>
+
+          {/* Open Date */}
           <div>
             <label
               style={{
@@ -658,19 +727,17 @@ function TradeModal({
                 marginBottom: 6,
               }}
             >
-              Direction
+              Open Date
             </label>
-            <select
-              style={inp}
-              value={form.direction}
-              onChange={(e) =>
-                set("direction", e.target.value as "Buy" | "Sell")
-              }
-            >
-              <option value="Buy">Buy</option>
-              <option value="Sell">Sell</option>
-            </select>
+            <input
+              style={{ ...inp, colorScheme: "dark" }}
+              type="datetime-local"
+              value={form.open_date}
+              onChange={(e) => set("open_date", e.target.value)}
+            />
           </div>
+
+          {/* Close Date */}
           <div>
             <label
               style={{
@@ -680,38 +747,202 @@ function TradeModal({
                 marginBottom: 6,
               }}
             >
-              Result
+              Close Date
             </label>
-            <select
-              style={inp}
-              value={form.result}
-              onChange={(e) =>
-                set("result", e.target.value as "Win" | "Loss" | "Breakeven")
-              }
-            >
-              <option value="Win">Win</option>
-              <option value="Loss">Loss</option>
-              <option value="Breakeven">Breakeven</option>
-            </select>
+            <input
+              style={{ ...inp, colorScheme: "dark" }}
+              type="datetime-local"
+              value={form.close_date}
+              onChange={(e) => set("close_date", e.target.value)}
+            />
           </div>
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <label
+
+          {/* Entry */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Entry Price
+            </label>
+            <input
+              style={inp}
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={form.entry || ""}
+              onChange={(e) => set("entry", parseFloat(e.target.value) || 0)}
+            />
+          </div>
+
+          {/* Exit */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Exit Price
+            </label>
+            <input
+              style={inp}
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={form.exit || ""}
+              onChange={(e) => set("exit", parseFloat(e.target.value) || 0)}
+            />
+          </div>
+
+          {/* Qty — text input supaya bisa ketik bebas */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Qty (Lot)
+            </label>
+            <input
+              style={inp}
+              type="text"
+              inputMode="decimal"
+              placeholder="0.01"
+              value={form.qty}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "" || val === "." || /^\d*\.?\d*$/.test(val)) {
+                  set("qty", val as unknown as number);
+                }
+              }}
+            />
+          </div>
+
+          {/* Fee */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Fee ($)
+            </label>
+            <input
+              style={inp}
+              type="number"
+              step="any"
+              min="0"
+              placeholder="0.00"
+              value={form.fee || ""}
+              onChange={(e) => set("fee", parseFloat(e.target.value) || 0)}
+            />
+          </div>
+
+          {/* Swap */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Swap ($)
+            </label>
+            <input
+              style={inp}
+              type="number"
+              step="any"
+              min="0"
+              placeholder="0.00"
+              value={form.swap || ""}
+              onChange={(e) => set("swap", parseFloat(e.target.value) || 0)}
+            />
+          </div>
+
+          {/* P&L — manual input, bisa minus */}
+          <div>
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              P&L ($)
+              <span style={{ color: C.muted, fontSize: 10, marginLeft: 6 }}>
+                ketik minus untuk loss
+              </span>
+            </label>
+            <input
+              style={{
+                ...inp,
+                color: pnlVal >= 0 ? C.success : C.danger,
+                fontWeight: 700,
+                border: `1px solid ${pnlVal >= 0 ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+              }}
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={form.pnl === 0 ? "" : form.pnl}
+              onChange={(e) => set("pnl", parseFloat(e.target.value) || 0)}
+            />
+          </div>
+
+          {/* Status — auto dari P&L */}
+          <div
             style={{
-              color: C.muted,
-              fontSize: 12,
-              display: "block",
-              marginBottom: 6,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
             }}
           >
-            Notes
-          </label>
-          <textarea
-            style={{ ...inp, height: 80, resize: "vertical" }}
-            value={form.notes}
-            onChange={(e) => set("notes", e.target.value)}
-          />
+            <label
+              style={{
+                color: C.muted,
+                fontSize: 12,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Status (Auto)
+            </label>
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                background:
+                  pnlStatus === "Win"
+                    ? "rgba(34,197,94,0.1)"
+                    : "rgba(239,68,68,0.1)",
+                border: `1px solid ${pnlStatus === "Win" ? C.success : C.danger}`,
+                color: pnlStatus === "Win" ? C.success : C.danger,
+                fontWeight: 700,
+                fontSize: 15,
+                textAlign: "center",
+              }}
+            >
+              {pnlStatus}
+            </div>
+          </div>
         </div>
+
+        {/* Buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
           <button
             onClick={onClose}
@@ -781,12 +1012,9 @@ function Sidebar({
     setPage(id);
     if (isMobile) onClose();
   };
-  const isHidden = isMobile ? collapsed : false;
-  const w = isMobile ? SIDEBAR_FULL : collapsed ? SIDEBAR_MINI : SIDEBAR_FULL;
 
   return (
     <>
-      {/* Mobile overlay */}
       {isMobile && !collapsed && (
         <div
           onClick={onClose}
@@ -800,7 +1028,11 @@ function Sidebar({
       )}
       <div
         style={{
-          width: w,
+          width: isMobile
+            ? SIDEBAR_FULL
+            : collapsed
+              ? SIDEBAR_MINI
+              : SIDEBAR_FULL,
           minHeight: "100vh",
           ...glass,
           borderRight: "1px solid rgba(255,255,255,0.05)",
@@ -814,7 +1046,11 @@ function Sidebar({
           zIndex: 50,
           boxSizing: "border-box",
           transition: "width 300ms ease, transform 300ms ease",
-          transform: isHidden ? "translateX(-100%)" : "translateX(0)",
+          transform: isMobile
+            ? collapsed
+              ? "translateX(-100%)"
+              : "translateX(0)"
+            : "translateX(0)",
           overflowX: "hidden",
         }}
       >
@@ -830,7 +1066,7 @@ function Sidebar({
         >
           <img
             src="/favicon.png"
-            alt="TradeIntel Logo"
+            alt="TradeIntel"
             style={{
               width: 34,
               height: 34,
@@ -853,7 +1089,7 @@ function Sidebar({
           )}
         </div>
 
-        {/* Nav */}
+        {/* Nav Items */}
         {NAV.map((n) => (
           <button
             key={n.id}
@@ -862,7 +1098,7 @@ function Sidebar({
               display: "flex",
               alignItems: "center",
               gap: 12,
-              padding: !isMobile && collapsed ? "10px 14px" : "10px 14px",
+              padding: "10px 14px",
               borderRadius: 12,
               border: "none",
               borderLeft:
@@ -1101,7 +1337,7 @@ function buildPerfData(trades: Trade[]): PerfPoint[] {
   let cum = 0;
   const grouped: Record<string, number> = {};
   sorted.forEach((t) => {
-    cum += t.profit;
+    cum += t.pnl ?? 0;
     grouped[t.created_at.slice(0, 10)] = cum;
   });
   return Object.entries(grouped).map(([label, value]) => ({ label, value }));
@@ -1111,19 +1347,17 @@ function buildPerfData(trades: Trade[]): PerfPoint[] {
 function DashboardPage({ trades }: { trades: Trade[] }) {
   const [perfTab, setPerfTab] = useState("Daily");
   const total = trades.length;
-  const wins = trades.filter((t) => t.result === "Win").length;
-  const losses = trades.filter((t) => t.result === "Loss").length;
-  const be = trades.filter((t) => t.result === "Breakeven").length;
-  const totalPnl = trades.reduce((s, t) => s + t.profit, 0);
+  const wins = trades.filter((t) => t.status === "Win").length;
+  const losses = trades.filter((t) => t.status === "Loss").length;
+  const totalPnl = trades.reduce((s, t) => s + (t.pnl ?? 0), 0);
   const winrate = total ? ((wins / total) * 100).toFixed(1) : "0.0";
   const thisWeekPnl = trades
     .filter(
       (t) =>
         new Date(t.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
     )
-    .reduce((s, t) => s + t.profit, 0);
+    .reduce((s, t) => s + (t.pnl ?? 0), 0);
   const perfData = buildPerfData(trades);
-
   const mockAI: AIResult = {
     bias: "buy",
     entry: "1945.00 – 1948.00",
@@ -1131,18 +1365,19 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
     take_profit: "1960.00",
     confidence: "high",
     reason:
-      "Price is rebounding from key support with strong bullish liquidity sweep. SMC structure confirms demand zone.",
+      "Price rebounding from key support with bullish liquidity sweep. SMC structure confirms demand zone.",
   };
 
   return (
     <div
       style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}
     >
+      {/* Stats */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <StatCard
-          label="Total Profit"
-          value={`$${totalPnl.toFixed(2)}`}
-          sub={totalPnl >= 0 ? "↑ All time" : "↓ All time"}
+          label="Total P&L"
+          value={`${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}`}
+          sub="All time"
           chart={perfData.map((d) => d.value).slice(-6)}
           subColor={totalPnl >= 0 ? C.success : C.danger}
         />
@@ -1161,13 +1396,15 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
           subColor={C.primary}
         />
         <StatCard
-          label="This Week PnL"
-          value={`$${thisWeekPnl.toFixed(2)}`}
+          label="This Week P&L"
+          value={`${thisWeekPnl >= 0 ? "+" : ""}$${thisWeekPnl.toFixed(2)}`}
           sub="Last 7 days"
           chart={[140, 170, 155, 190, 210]}
           subColor={thisWeekPnl >= 0 ? C.success : C.danger}
         />
       </div>
+
+      {/* Chart + AI */}
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <div
           style={{
@@ -1236,6 +1473,8 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
           <AIInsightCard insight={mockAI} />
         </div>
       </div>
+
+      {/* Recent + Donut */}
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <div
           style={{
@@ -1289,27 +1528,28 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
                 </span>
                 <span
                   style={{
-                    color: t.direction === "Buy" ? C.success : C.danger,
+                    color: t.side === "Buy" ? C.success : C.danger,
                     marginLeft: 8,
                     fontSize: 12,
                     fontWeight: 600,
                   }}
                 >
-                  {t.direction}
+                  {t.side}
                 </span>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div
                   style={{
-                    color: t.profit >= 0 ? C.success : C.danger,
+                    color: (t.pnl ?? 0) >= 0 ? C.success : C.danger,
                     fontWeight: 700,
                     fontSize: 14,
                   }}
                 >
-                  {t.profit >= 0 ? "+" : ""}${Math.abs(t.profit).toFixed(2)}
+                  {(t.pnl ?? 0) >= 0 ? "+" : ""}$
+                  {Math.abs(t.pnl ?? 0).toFixed(2)}
                 </div>
                 <div style={{ color: C.muted, fontSize: 10 }}>
-                  {t.created_at.slice(0, 10)}
+                  {t.close_date?.slice(0, 10) || t.created_at.slice(0, 10)}
                 </div>
               </div>
             </div>
@@ -1335,7 +1575,7 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
             Trades Overview
           </div>
           <div style={{ height: 140 }}>
-            <DonutChart win={wins} loss={losses} be={be} total={total || 1} />
+            <DonutChart win={wins} loss={losses} total={total || 1} />
           </div>
           <div
             style={{
@@ -1349,7 +1589,6 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
               [
                 ["Win", wins, C.success],
                 ["Loss", losses, C.danger],
-                ["Breakeven", be, C.muted],
               ] as [string, number, string][]
             ).map(([label, count, color]) => (
               <div
@@ -1401,15 +1640,24 @@ function JournalPage({
   const isMobile = useIsMobile();
 
   const filtered = trades.filter((t) => {
-    if (filter !== "All" && t.result !== filter) return false;
+    if (filter !== "All" && t.status !== filter) return false;
     if (search && !t.pair.toLowerCase().includes(search.toLowerCase()))
       return false;
     return true;
   });
 
   const handleSave = async (form: TradeFormData) => {
-    if (form.id) await onUpdate(form.id, form);
-    else await onAdd(form as Omit<Trade, "id" | "created_at">);
+    const pnl = Number(form.pnl);
+    const status: "Win" | "Loss" = pnl >= 0 ? "Win" : "Loss";
+    const qty = parseFloat(String(form.qty)) || 0.01;
+    if (form.id) {
+      await onUpdate(form.id, { ...form, qty, pnl, status } as Partial<Trade>);
+    } else {
+      await onAdd({ ...form, qty, pnl, status } as Omit<
+        Trade,
+        "id" | "created_at"
+      >);
+    }
     setModal(null);
   };
 
@@ -1432,13 +1680,13 @@ function JournalPage({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 20,
+          marginBottom: 16,
           flexWrap: "wrap",
           gap: 12,
         }}
       >
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {(["All", "Win", "Loss", "Breakeven"] as FilterType[]).map((f) => (
+          {(["All", "Win", "Loss"] as FilterType[]).map((f) => (
             <button
               key={f}
               style={btnStyle(filter === f)}
@@ -1453,7 +1701,7 @@ function JournalPage({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search trades…"
+              placeholder="Search symbol…"
               style={{
                 background: C.card,
                 border: `1px solid ${C.border}`,
@@ -1485,12 +1733,11 @@ function JournalPage({
         </div>
       </div>
 
-      {/* Mobile search */}
       {isMobile && (
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search trades…"
+          placeholder="Search symbol…"
           style={{
             background: C.card,
             border: `1px solid ${C.border}`,
@@ -1507,24 +1754,25 @@ function JournalPage({
         />
       )}
 
-      {/* Table dengan scroll horizontal */}
       <div style={{ ...glass, borderRadius: 16, overflow: "hidden" }}>
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <table
-            style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}
+            style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}
           >
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                 {[
-                  "Pair",
-                  "TF",
-                  "Dir",
+                  "Symbol",
+                  "Side",
+                  "Open Date",
+                  "Close Date",
                   "Entry",
-                  "SL",
-                  "TP",
-                  "Result",
-                  "P/L",
-                  "Date",
+                  "Exit",
+                  "Qty",
+                  "Fee",
+                  "Swap",
+                  "P&L",
+                  "Status",
                   "",
                 ].map((h) => (
                   <th
@@ -1555,7 +1803,7 @@ function JournalPage({
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={12}
                     style={{ padding: 40, textAlign: "center", color: C.muted }}
                   >
                     No trades found. Add your first trade!
@@ -1580,11 +1828,9 @@ function JournalPage({
 
 // ─── AI Page ──────────────────────────────────────────────────────────────────
 function AIPage() {
-  const [tab, setTab] = useState<TabType>("Short-Term");
   const [method, setMethod] = useState<MethodType>("scalping");
   const [pair, setPair] = useState("XAUUSD");
   const [tf, setTf] = useState("15m");
-  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AIResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1619,8 +1865,10 @@ function AIPage() {
       if (data.error) throw new Error(data.error);
       setResult(data);
       await incrementUsage();
-    } catch (err: any) {
-      setError(err.message || "Failed to generate signal. Please try again.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to generate signal.",
+      );
     }
     setLoading(false);
   };
@@ -1640,6 +1888,7 @@ function AIPage() {
 
   return (
     <div style={{ padding: 24, display: "flex", gap: 24, flexWrap: "wrap" }}>
+      {/* Left */}
       <div
         style={{
           flex: 2,
@@ -1650,27 +1899,7 @@ function AIPage() {
         }}
       >
         <div style={{ ...glass, borderRadius: 16, padding: 20 }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-            {(["Short-Term", "Weekly Analysis"] as TabType[]).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                style={{
-                  background: tab === t ? C.primary : "transparent",
-                  border: `1px solid ${tab === t ? C.primary : C.border}`,
-                  borderRadius: 8,
-                  color: tab === t ? "#fff" : C.muted,
-                  padding: "6px 16px",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  fontWeight: tab === t ? 600 : 400,
-                  fontFamily: "inherit",
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          {/* Method */}
           <div
             style={{
               color: C.muted,
@@ -1711,6 +1940,8 @@ function AIPage() {
               </button>
             ))}
           </div>
+
+          {/* Market */}
           <div
             style={{
               color: C.muted,
@@ -1719,7 +1950,7 @@ function AIPage() {
               marginBottom: 12,
             }}
           >
-            2. Market
+            2. Select Market
           </div>
           <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
             <div style={{ flex: 1 }}>
@@ -1738,11 +1969,20 @@ function AIPage() {
                 value={pair}
                 onChange={(e) => setPair(e.target.value)}
               >
-                {["XAUUSD", "NAS100", "EURUSD", "GBPJPY", "US30", "BTCUSD"].map(
-                  (p) => (
-                    <option key={p}>{p}</option>
-                  ),
-                )}
+                {[
+                  "XAUUSD",
+                  "NAS100",
+                  "EURUSD",
+                  "GBPJPY",
+                  "GBPUSD",
+                  "USDJPY",
+                  "AUDUSD",
+                  "US30",
+                  "BTCUSD",
+                  "ETHUSD",
+                ].map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
               </select>
             </div>
             <div style={{ flex: 1 }}>
@@ -1767,32 +2007,24 @@ function AIPage() {
               </select>
             </div>
           </div>
+
+          {/* Disclaimer */}
           <div
             style={{
-              color: C.muted,
-              fontSize: 12,
-              fontWeight: 600,
-              marginBottom: 8,
-            }}
-          >
-            3. Additional Notes (Optional)
-          </div>
-          <textarea
-            style={{ ...inp, height: 80, resize: "vertical", marginBottom: 4 }}
-            placeholder="Tell the AI what you want to focus on…"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value.slice(0, 500))}
-          />
-          <div
-            style={{
-              color: C.muted,
-              fontSize: 10,
-              textAlign: "right",
+              background: "rgba(251,191,36,0.08)",
+              border: "1px solid rgba(251,191,36,0.2)",
+              borderRadius: 10,
+              padding: "10px 14px",
               marginBottom: 16,
+              fontSize: 11,
+              color: "#FBB724",
+              lineHeight: 1.5,
             }}
           >
-            {notes.length}/500
+            ⚠️ AI signals are for educational purposes only. Always do your own
+            analysis. Trading involves risk of loss.
           </div>
+
           {isLocked && (
             <div
               style={{
@@ -1814,10 +2046,11 @@ function AIPage() {
                 Trial Limit Reached
               </div>
               <div style={{ color: C.muted, fontSize: 12 }}>
-                Upgrade to Pro for unlimited AI analysis.
+                Upgrade to Pro for unlimited AI signals.
               </div>
             </div>
           )}
+
           <button
             onClick={generate}
             disabled={loading || isLocked}
@@ -1840,10 +2073,13 @@ function AIPage() {
               fontFamily: "inherit",
             }}
           >
-            {loading ? "Analyzing…" : "✦ Generate AI Analysis"}
+            {loading
+              ? "Fetching market data & analyzing…"
+              : "✦ Generate Signal"}
           </button>
         </div>
 
+        {/* Loading skeleton */}
         {loading && (
           <div
             style={{
@@ -1855,6 +2091,9 @@ function AIPage() {
               gap: 12,
             }}
           >
+            <div style={{ color: C.muted, fontSize: 12, marginBottom: 4 }}>
+              Fetching 50 candles + analyzing with {method.toUpperCase()} rules…
+            </div>
             {[80, 40, 60, 100].map((w, i) => (
               <div
                 key={i}
@@ -1870,80 +2109,145 @@ function AIPage() {
           </div>
         )}
 
+        {/* Result */}
         {result && !loading && (
           <div style={{ ...glass, borderRadius: 16, padding: 24 }}>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
+                alignItems: "center",
                 marginBottom: 16,
               }}
             >
               <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>
-                AI Result
+                Signal Result
               </span>
-              <span
-                style={{
-                  background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-                  borderRadius: 999,
-                  padding: "2px 10px",
-                  fontSize: 11,
-                  color: "#fff",
-                }}
-              >
-                {method.toUpperCase()}
-              </span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <span
+                  style={{
+                    background: "rgba(59,130,246,0.15)",
+                    borderRadius: 999,
+                    padding: "2px 10px",
+                    fontSize: 11,
+                    color: C.primary,
+                  }}
+                >
+                  {result.pair || pair} · {result.timeframe || tf}
+                </span>
+                <span
+                  style={{
+                    background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
+                    borderRadius: 999,
+                    padding: "2px 10px",
+                    fontSize: 11,
+                    color: "#fff",
+                  }}
+                >
+                  {method.toUpperCase()}
+                </span>
+              </div>
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ color: C.muted, fontSize: 11 }}>Bias</div>
+
+            {/* Bias */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: C.muted, fontSize: 11, marginBottom: 4 }}>
+                Signal
+              </div>
               <div
                 style={{
                   color: result.bias === "buy" ? C.success : C.danger,
-                  fontSize: 36,
-                  fontWeight: 800,
+                  fontSize: 40,
+                  fontWeight: 900,
+                  letterSpacing: -1,
                 }}
               >
-                {result.bias.toUpperCase()}
+                {result.bias?.toUpperCase()}
               </div>
             </div>
+
+            {/* Levels */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 10,
                 marginBottom: 16,
               }}
             >
               {(
                 [
-                  ["Entry Zone", result.entry, C.text],
+                  ["Entry", result.entry, C.primary],
                   ["Stop Loss", result.stop_loss, C.danger],
                   ["Take Profit", result.take_profit, C.success],
-                  [
-                    "Confidence",
-                    result.confidence,
-                    result.confidence === "high" ? C.success : "#F59E0B",
-                  ],
                 ] as [string, string, string][]
               ).map(([l, v, col]) => (
                 <div
                   key={l}
-                  style={{ background: C.bg, borderRadius: 10, padding: 12 }}
+                  style={{
+                    background: C.bg,
+                    borderRadius: 10,
+                    padding: 12,
+                    textAlign: "center",
+                  }}
                 >
-                  <div style={{ color: C.muted, fontSize: 10 }}>{l}</div>
                   <div
-                    style={{
-                      color: col,
-                      fontWeight: 700,
-                      fontSize: 14,
-                      marginTop: 4,
-                    }}
+                    style={{ color: C.muted, fontSize: 10, marginBottom: 4 }}
                   >
+                    {l}
+                  </div>
+                  <div style={{ color: col, fontWeight: 700, fontSize: 15 }}>
                     {v}
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* Confidence + Current Price */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              <span style={{ color: C.muted, fontSize: 12 }}>Confidence:</span>
+              <span
+                style={{
+                  color:
+                    result.confidence === "high"
+                      ? C.success
+                      : result.confidence === "medium"
+                        ? "#F59E0B"
+                        : C.danger,
+                  background:
+                    result.confidence === "high"
+                      ? "rgba(34,197,94,0.1)"
+                      : result.confidence === "medium"
+                        ? "rgba(245,158,11,0.1)"
+                        : "rgba(239,68,68,0.1)",
+                  borderRadius: 6,
+                  padding: "2px 10px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {result.confidence?.toUpperCase()}
+              </span>
+              {result.current_price && (
+                <span
+                  style={{ color: C.muted, fontSize: 11, marginLeft: "auto" }}
+                >
+                  Current:{" "}
+                  <strong style={{ color: C.text }}>
+                    {result.current_price}
+                  </strong>
+                </span>
+              )}
+            </div>
+
+            {/* Reason */}
             <div
               style={{
                 background: C.bg,
@@ -1952,12 +2256,47 @@ function AIPage() {
                 color: C.muted,
                 fontSize: 13,
                 lineHeight: 1.6,
+                marginBottom: 12,
               }}
             >
               {result.reason}
             </div>
+
+            {/* Indicators */}
+            {result.indicators && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(result.indicators).map(([k, v]) => (
+                  <span
+                    key={k}
+                    style={{
+                      background: C.border,
+                      borderRadius: 6,
+                      padding: "3px 8px",
+                      fontSize: 10,
+                      color: C.muted,
+                    }}
+                  >
+                    {k.toUpperCase()}: {String(v)}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {result.generated_at && (
+              <div
+                style={{
+                  marginTop: 10,
+                  fontSize: 10,
+                  color: C.muted,
+                  textAlign: "right",
+                }}
+              >
+                Generated: {new Date(result.generated_at).toLocaleString()}
+              </div>
+            )}
           </div>
         )}
+
         {error && (
           <div
             style={{
@@ -1969,11 +2308,12 @@ function AIPage() {
               fontSize: 13,
             }}
           >
-            {error}
+            ❌ {error}
           </div>
         )}
       </div>
 
+      {/* Right Panel */}
       <div
         style={{
           flex: 1,
@@ -1989,20 +2329,12 @@ function AIPage() {
           </div>
           {(
             [
-              [
-                "1",
-                "Choose Method",
-                "Select the analysis method you want to use.",
-              ],
-              [
-                "2",
-                "Provide Context",
-                "Add notes or context about the market.",
-              ],
+              ["1", "Select Method", "Choose your trading strategy."],
+              ["2", "Select Market", "Pick symbol and timeframe."],
               [
                 "3",
-                "Get AI Insight",
-                "AI will analyze and give an actionable insight.",
+                "Generate",
+                "AI fetches 50 real candles, calculates EMA/RSI/ATR, then generates signal.",
               ],
             ] as [string, string, string][]
           ).map(([n, t, d]) => (
@@ -2035,6 +2367,8 @@ function AIPage() {
             </div>
           ))}
         </div>
+
+        {/* Usage */}
         <div style={{ ...glass, borderRadius: 16, padding: 20 }}>
           <div
             style={{
@@ -2047,8 +2381,8 @@ function AIPage() {
             Trial Limit (Free Plan)
           </div>
           <div style={{ color: C.muted, fontSize: 11, marginBottom: 12 }}>
-            ✓ 3 analyses per week
-            <br />✓ Max 12 analyses per account (6 months)
+            ✓ 3 signals per week
+            <br />✓ Max 12 signals per account
           </div>
           <div
             style={{
@@ -2058,7 +2392,7 @@ function AIPage() {
               marginBottom: 8,
             }}
           >
-            Your AI Trial Usage
+            Your Usage
           </div>
           {(
             [
@@ -2069,7 +2403,7 @@ function AIPage() {
                 "linear-gradient(90deg,#3B82F6,#8B5CF6)",
               ],
               [
-                "total (6 months)",
+                "total",
                 totalUsed,
                 TOTAL_LIMIT,
                 "linear-gradient(90deg,#EF4444,#F59E0B)",
@@ -2087,7 +2421,7 @@ function AIPage() {
                 }}
               >
                 <span>
-                  {used} / {limit} used {label}
+                  {used} / {limit} {label}
                 </span>
                 <span>{Math.round((used / limit) * 100)}%</span>
               </div>
@@ -2104,6 +2438,8 @@ function AIPage() {
             </div>
           ))}
         </div>
+
+        {/* Upgrade */}
         <div
           style={{
             background:
@@ -2117,7 +2453,7 @@ function AIPage() {
             Upgrade to Pro
           </div>
           <div style={{ color: C.muted, fontSize: 12, marginBottom: 14 }}>
-            Unlock unlimited AI analysis and advanced methods.
+            Unlimited signals, all methods, 24/7 access.
           </div>
           <button
             style={{
@@ -2143,16 +2479,14 @@ function AIPage() {
 
 // ─── Weekly Page ──────────────────────────────────────────────────────────────
 function WeeklyPage({ trades }: { trades: Trade[] }) {
-  const weekly: Record<
-    string,
-    { wins: number; losses: number; profit: number }
-  > = {};
+  const weekly: Record<string, { wins: number; losses: number; pnl: number }> =
+    {};
   trades.forEach((t) => {
-    const key = t.created_at.slice(0, 7);
-    if (!weekly[key]) weekly[key] = { wins: 0, losses: 0, profit: 0 };
-    if (t.result === "Win") weekly[key].wins++;
-    if (t.result === "Loss") weekly[key].losses++;
-    weekly[key].profit += t.profit;
+    const key = t.close_date?.slice(0, 7) || t.created_at.slice(0, 7);
+    if (!weekly[key]) weekly[key] = { wins: 0, losses: 0, pnl: 0 };
+    if (t.status === "Win") weekly[key].wins++;
+    if (t.status === "Loss") weekly[key].losses++;
+    weekly[key].pnl += t.pnl ?? 0;
   });
   const perfData = buildPerfData(trades);
 
@@ -2169,7 +2503,7 @@ function WeeklyPage({ trades }: { trades: Trade[] }) {
             marginBottom: 20,
           }}
         >
-          Weekly Performance Summary
+          Cumulative P&L
         </div>
         <div style={{ height: 200 }}>
           <PerformanceChart data={perfData} />
@@ -2204,27 +2538,29 @@ function WeeklyPage({ trades }: { trades: Trade[] }) {
           gap: 16,
         }}
       >
-        {Object.entries(weekly).map(([key, data]) => (
-          <div key={key} style={{ ...glass, borderRadius: 16, padding: 20 }}>
-            <div style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>
-              {key}
+        {Object.entries(weekly)
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([key, data]) => (
+            <div key={key} style={{ ...glass, borderRadius: 16, padding: 20 }}>
+              <div style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>
+                {key}
+              </div>
+              <div
+                style={{
+                  color: data.pnl >= 0 ? C.success : C.danger,
+                  fontSize: 24,
+                  fontWeight: 800,
+                  marginBottom: 8,
+                }}
+              >
+                {data.pnl >= 0 ? "+" : ""}${data.pnl.toFixed(2)}
+              </div>
+              <div style={{ display: "flex", gap: 12, fontSize: 12 }}>
+                <span style={{ color: C.success }}>✓ {data.wins} wins</span>
+                <span style={{ color: C.danger }}>✗ {data.losses} losses</span>
+              </div>
             </div>
-            <div
-              style={{
-                color: data.profit >= 0 ? C.success : C.danger,
-                fontSize: 24,
-                fontWeight: 800,
-                marginBottom: 8,
-              }}
-            >
-              {data.profit >= 0 ? "+" : ""}${data.profit.toFixed(2)}
-            </div>
-            <div style={{ display: "flex", gap: 12, fontSize: 12 }}>
-              <span style={{ color: C.success }}>✓ {data.wins} wins</span>
-              <span style={{ color: C.danger }}>✗ {data.losses} losses</span>
-            </div>
-          </div>
-        ))}
+          ))}
       </div>
     </div>
   );
@@ -2346,8 +2682,8 @@ function SettingsPage({
               price: "$0/mo",
               features: [
                 "Dashboard & Journal",
-                "3 AI analyses/week",
-                "12 total AI uses",
+                "3 AI signals/week",
+                "12 total signals",
               ],
               active: true,
             },
@@ -2356,8 +2692,8 @@ function SettingsPage({
               price: "$29/mo",
               features: [
                 "Everything in Free",
-                "Unlimited AI analyses",
-                "All methods + Weekly",
+                "Unlimited AI signals",
+                "All methods, 24/7",
               ],
               active: false,
             },
@@ -2463,30 +2799,17 @@ function LoadingScreen() {
         fontFamily: "'Plus Jakarta Sans','Inter',sans-serif",
       }}
     >
-      {/* Fix 2: Logo benar-benar center */}
-      <div
+      <img
+        src="/logo.png"
+        alt="TradeIntel"
         style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 16,
+          width: 100,
+          height: 100,
+          objectFit: "contain",
+          display: "block",
         }}
-      >
-        <img
-          src="/favicon.png"
-          alt="TradeIntel Logo"
-          style={{
-            width: 100,
-            height: 100,
-            objectFit: "contain",
-            display: "block",
-          }}
-        />
-        <div style={{ color: C.muted, fontSize: 14, textAlign: "center" }}>
-          Loading TradeIntel…
-        </div>
-      </div>
+      />
+      <div style={{ color: C.muted, fontSize: 14 }}>Loading TradeIntel…</div>
     </div>
   );
 }
@@ -2497,15 +2820,9 @@ export default function App() {
   const { trades, addTrade, updateTrade, deleteTrade } = useTrades();
   const [page, setPage] = useState<PageId>("dashboard");
   const isMobile = useIsMobile();
-
-  // Fix 1: Desktop collapsed state, Mobile open/close state
-  // Desktop: false = full (220px), true = mini (60px)
-  // Mobile: false = open (overlay), true = hidden
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    // Mobile default: sidebar tertutup
-    // Desktop default: sidebar terbuka full
     setCollapsed(isMobile ? true : false);
   }, [isMobile]);
 
@@ -2518,10 +2835,6 @@ export default function App() {
     user.email?.split("@")[0] ||
     "Trader";
   const userEmail = user.email ?? "";
-
-  // Fix 1: Margin logic
-  // Desktop: full sidebar = margin 220, mini = margin 60
-  // Mobile: konten selalu full width (sidebar overlay)
   const mainMarginLeft = isMobile ? 0 : collapsed ? SIDEBAR_MINI : SIDEBAR_FULL;
 
   const renderPage = (): ReactNode => {
@@ -2570,6 +2883,7 @@ export default function App() {
         button { font-family: inherit; }
         select option { background: #111827; color: #E5E7EB; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1); }
       `}</style>
 
       <Sidebar
@@ -2581,7 +2895,6 @@ export default function App() {
         isMobile={isMobile}
         onClose={() => setCollapsed(true)}
       />
-
       <div
         style={{
           marginLeft: mainMarginLeft,

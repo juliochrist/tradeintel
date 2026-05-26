@@ -4,15 +4,18 @@ import { useAuth } from "./useAuth";
 
 export interface Trade {
   id: number;
+  user_id?: string;
   pair: string;
-  timeframe: string;
-  direction: "Buy" | "Sell";
+  side: "Buy" | "Sell";
+  open_date: string;
+  close_date: string;
   entry: number;
-  sl: number;
-  tp: number;
-  result: "Win" | "Loss" | "Breakeven";
-  profit: number;
-  notes: string;
+  exit: number;
+  qty: number;
+  fee: number;
+  swap: number;
+  pnl: number; // user input manual
+  status: "Win" | "Loss"; // auto dari pnl
   created_at: string;
 }
 
@@ -21,7 +24,6 @@ export function useTrades() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch semua trades user
   const fetchTrades = async () => {
     if (!user) return;
     setLoading(true);
@@ -29,7 +31,6 @@ export function useTrades() {
       .from("trades")
       .select("*")
       .order("created_at", { ascending: false });
-
     if (!error && data) setTrades(data);
     setLoading(false);
   };
@@ -38,35 +39,34 @@ export function useTrades() {
     fetchTrades();
   }, [user]);
 
-  // Add trade
   const addTrade = async (trade: Omit<Trade, "id" | "created_at">) => {
     if (!user) return;
+    // Status auto dari pnl
+    const status: "Win" | "Loss" = trade.pnl >= 0 ? "Win" : "Loss";
     const { data, error } = await supabase
       .from("trades")
-      .insert([{ ...trade, user_id: user.id }])
+      .insert([{ ...trade, status, user_id: user.id }])
       .select()
       .single();
-
     if (!error && data) setTrades((prev) => [data, ...prev]);
   };
 
-  // Update trade
   const updateTrade = async (id: number, trade: Partial<Trade>) => {
+    // Status auto dari pnl kalau pnl diupdate
+    const status: "Win" | "Loss" | undefined =
+      trade.pnl !== undefined ? (trade.pnl >= 0 ? "Win" : "Loss") : undefined;
     const { data, error } = await supabase
       .from("trades")
-      .update(trade)
+      .update({ ...trade, ...(status ? { status } : {}) })
       .eq("id", id)
       .select()
       .single();
-
     if (!error && data)
       setTrades((prev) => prev.map((t) => (t.id === id ? data : t)));
   };
 
-  // Delete trade
   const deleteTrade = async (id: number) => {
     const { error } = await supabase.from("trades").delete().eq("id", id);
-
     if (!error) setTrades((prev) => prev.filter((t) => t.id !== id));
   };
 
