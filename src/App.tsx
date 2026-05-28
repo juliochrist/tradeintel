@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { useTrades } from "./hooks/useTrades";
 import type { Trade } from "./hooks/useTrades";
 import Auth from "./components/Auth";
 import { useAIUsage } from "./hooks/useAIUsage";
+import { supabase } from "./lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AIResult {
@@ -16,6 +17,7 @@ interface AIResult {
   reason: string;
   pair?: string;
   timeframe?: string;
+  method?: string;
   current_price?: number;
   generated_at?: string;
   indicators?: Record<string, unknown>;
@@ -25,11 +27,15 @@ interface PerfPoint {
   label: string;
   value: number;
 }
+interface ToastItem {
+  id: number;
+  message: string;
+  type: "success" | "error" | "info";
+}
 
 type PageId = "dashboard" | "journal" | "ai" | "weekly" | "settings";
 type FilterType = "All" | "Win" | "Loss";
 type MethodType = "scalping" | "smc" | "trend" | "breakout";
-
 type TradeFormData = Omit<Trade, "id" | "created_at" | "status"> & {
   id?: number;
   created_at?: string;
@@ -56,6 +62,7 @@ const glass: CSSProperties = {
 
 const SIDEBAR_FULL = 220;
 const SIDEBAR_MINI = 60;
+const PAGE_SIZE = 10;
 
 // ─── useIsMobile ──────────────────────────────────────────────────────────────
 function useIsMobile() {
@@ -67,6 +74,70 @@ function useIsMobile() {
   }, []);
   return isMobile;
 }
+
+// ─── Toast System ─────────────────────────────────────────────────────────────
+let toastId = 0;
+type ToastFn = (msg: string, type?: "success" | "error" | "info") => void;
+let globalToast: ToastFn = () => {};
+
+function ToastContainer() {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const addToast = useCallback<ToastFn>((message, type = "info") => {
+    const id = ++toastId;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(
+      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+      3000,
+    );
+  }, []);
+
+  useEffect(() => {
+    globalToast = addToast;
+  }, [addToast]);
+
+  const colors = { success: C.success, error: C.danger, info: C.primary };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 24,
+        right: 24,
+        zIndex: 999,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          style={{
+            background: C.card,
+            border: `1px solid ${colors[t.type]}`,
+            borderRadius: 12,
+            padding: "12px 18px",
+            color: C.text,
+            fontSize: 14,
+            boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            animation: "slideIn 200ms ease",
+          }}
+        >
+          <span style={{ color: colors[t.type], fontSize: 16 }}>
+            {t.type === "success" ? "✓" : t.type === "error" ? "✕" : "ℹ"}
+          </span>
+          {t.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const toast: ToastFn = (msg, type) => globalToast(msg, type);
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 function Sparkline({
@@ -164,8 +235,8 @@ function DonutChart({
     cy = 50,
     stroke = 10,
     circ = 2 * Math.PI * r;
-  const winD = (win / total) * circ || 0;
-  const lossD = (loss / total) * circ || 0;
+  const winD = (win / total) * circ || 0,
+    lossD = (loss / total) * circ || 0;
   return (
     <svg viewBox="0 0 100 100" style={{ width: "100%", height: "100%" }}>
       <circle
@@ -287,7 +358,7 @@ function AIInsightCard({ insight }: { insight: AIResult }) {
         }}
       >
         <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>
-          AI Insight
+          Latest AI Signal
         </span>
         <span
           style={{
@@ -299,9 +370,14 @@ function AIInsightCard({ insight }: { insight: AIResult }) {
             fontWeight: 600,
           }}
         >
-          Scalping
+          {insight.method?.toUpperCase() || "AI"}
         </span>
       </div>
+      {insight.pair && (
+        <div style={{ color: C.muted, fontSize: 11 }}>
+          {insight.pair} · {insight.timeframe}
+        </div>
+      )}
       <div>
         <div style={{ color: C.muted, fontSize: 11 }}>Bias</div>
         <div
@@ -317,7 +393,7 @@ function AIInsightCard({ insight }: { insight: AIResult }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {(
           [
-            ["Entry Zone", insight.entry, C.text],
+            ["Entry", insight.entry, C.text],
             [
               "Confidence",
               insight.confidence.charAt(0).toUpperCase() +
@@ -346,6 +422,11 @@ function AIInsightCard({ insight }: { insight: AIResult }) {
       >
         {insight.reason}
       </div>
+      {insight.generated_at && (
+        <div style={{ fontSize: 10, color: C.muted, textAlign: "right" }}>
+          {new Date(insight.generated_at).toLocaleString()}
+        </div>
+      )}
     </div>
   );
 }
@@ -574,7 +655,6 @@ function TradeModal({
 
   const set = <K extends keyof TradeFormData>(k: K, v: TradeFormData[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
-
   const inp: CSSProperties = {
     background: C.bg,
     border: `1px solid ${C.border}`,
@@ -587,7 +667,6 @@ function TradeModal({
     boxSizing: "border-box",
     fontFamily: "inherit",
   };
-
   const pnlVal = Number(form.pnl);
   const pnlStatus = pnlVal >= 0 ? "Win" : "Loss";
 
@@ -616,7 +695,6 @@ function TradeModal({
           overflowY: "auto",
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -643,11 +721,9 @@ function TradeModal({
             ✕
           </button>
         </div>
-
         <div
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
         >
-          {/* Symbol */}
           <div>
             <label
               style={{
@@ -666,8 +742,6 @@ function TradeModal({
               placeholder="XAUUSD"
             />
           </div>
-
-          {/* Side */}
           <div>
             <label
               style={{
@@ -716,8 +790,6 @@ function TradeModal({
               ))}
             </div>
           </div>
-
-          {/* Open Date */}
           <div>
             <label
               style={{
@@ -736,8 +808,6 @@ function TradeModal({
               onChange={(e) => set("open_date", e.target.value)}
             />
           </div>
-
-          {/* Close Date */}
           <div>
             <label
               style={{
@@ -756,8 +826,6 @@ function TradeModal({
               onChange={(e) => set("close_date", e.target.value)}
             />
           </div>
-
-          {/* Entry */}
           <div>
             <label
               style={{
@@ -778,8 +846,6 @@ function TradeModal({
               onChange={(e) => set("entry", parseFloat(e.target.value) || 0)}
             />
           </div>
-
-          {/* Exit */}
           <div>
             <label
               style={{
@@ -800,8 +866,6 @@ function TradeModal({
               onChange={(e) => set("exit", parseFloat(e.target.value) || 0)}
             />
           </div>
-
-          {/* Qty — text input supaya bisa ketik bebas */}
           <div>
             <label
               style={{
@@ -821,14 +885,11 @@ function TradeModal({
               value={form.qty}
               onChange={(e) => {
                 const val = e.target.value;
-                if (val === "" || val === "." || /^\d*\.?\d*$/.test(val)) {
+                if (val === "" || val === "." || /^\d*\.?\d*$/.test(val))
                   set("qty", val as unknown as number);
-                }
               }}
             />
           </div>
-
-          {/* Fee */}
           <div>
             <label
               style={{
@@ -850,8 +911,6 @@ function TradeModal({
               onChange={(e) => set("fee", parseFloat(e.target.value) || 0)}
             />
           </div>
-
-          {/* Swap */}
           <div>
             <label
               style={{
@@ -873,8 +932,6 @@ function TradeModal({
               onChange={(e) => set("swap", parseFloat(e.target.value) || 0)}
             />
           </div>
-
-          {/* P&L — manual input, bisa minus */}
           <div>
             <label
               style={{
@@ -884,9 +941,9 @@ function TradeModal({
                 marginBottom: 6,
               }}
             >
-              P&L ($)
-              <span style={{ color: C.muted, fontSize: 10, marginLeft: 6 }}>
-                ketik minus untuk loss
+              P&L ($){" "}
+              <span style={{ color: C.muted, fontSize: 10 }}>
+                — minus untuk loss
               </span>
             </label>
             <input
@@ -903,8 +960,6 @@ function TradeModal({
               onChange={(e) => set("pnl", parseFloat(e.target.value) || 0)}
             />
           </div>
-
-          {/* Status — auto dari P&L */}
           <div
             style={{
               display: "flex",
@@ -941,8 +996,6 @@ function TradeModal({
             </div>
           </div>
         </div>
-
-        {/* Buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
           <button
             onClick={onClose}
@@ -1012,7 +1065,6 @@ function Sidebar({
     setPage(id);
     if (isMobile) onClose();
   };
-
   return (
     <>
       {isMobile && !collapsed && (
@@ -1054,7 +1106,6 @@ function Sidebar({
           overflowX: "hidden",
         }}
       >
-        {/* Logo */}
         <div
           style={{
             display: "flex",
@@ -1088,8 +1139,6 @@ function Sidebar({
             />
           )}
         </div>
-
-        {/* Nav Items */}
         {NAV.map((n) => (
           <button
             key={n.id}
@@ -1122,8 +1171,6 @@ function Sidebar({
             {(!collapsed || isMobile) && n.label}
           </button>
         ))}
-
-        {/* Bottom */}
         {(!collapsed || isMobile) && (
           <div
             style={{
@@ -1153,7 +1200,7 @@ function Sidebar({
                 Upgrade to Pro
               </div>
               <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
-                Unlock unlimited AI analysis and advanced features.
+                Unlock unlimited AI signals and advanced features.
               </div>
               <button
                 style={{
@@ -1344,7 +1391,15 @@ function buildPerfData(trades: Trade[]): PerfPoint[] {
 }
 
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
-function DashboardPage({ trades }: { trades: Trade[] }) {
+function DashboardPage({
+  trades,
+  lastSignal,
+  onNavigateAI,
+}: {
+  trades: Trade[];
+  lastSignal: AIResult | null;
+  onNavigateAI: () => void;
+}) {
   const [perfTab, setPerfTab] = useState("Daily");
   const total = trades.length;
   const wins = trades.filter((t) => t.status === "Win").length;
@@ -1358,21 +1413,22 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
     )
     .reduce((s, t) => s + (t.pnl ?? 0), 0);
   const perfData = buildPerfData(trades);
-  const mockAI: AIResult = {
+
+  // Default AI card when no signal yet
+  const defaultAI: AIResult = {
     bias: "buy",
-    entry: "1945.00 – 1948.00",
-    stop_loss: "1938.00",
-    take_profit: "1960.00",
+    entry: "–",
+    stop_loss: "–",
+    take_profit: "–",
     confidence: "high",
-    reason:
-      "Price rebounding from key support with bullish liquidity sweep. SMC structure confirms demand zone.",
+    reason: "Generate your first AI signal to see insights here.",
+    method: "AI",
   };
 
   return (
     <div
       style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}
     >
-      {/* Stats */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <StatCard
           label="Total P&L"
@@ -1403,8 +1459,6 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
           subColor={thisWeekPnl >= 0 ? C.success : C.danger}
         />
       </div>
-
-      {/* Chart + AI */}
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <div
           style={{
@@ -1469,12 +1523,36 @@ function DashboardPage({ trades }: { trades: Trade[] }) {
               ))}
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <AIInsightCard insight={mockAI} />
+        <div
+          style={{
+            flex: 1,
+            minWidth: 240,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <AIInsightCard insight={lastSignal || defaultAI} />
+          {!lastSignal && (
+            <button
+              onClick={onNavigateAI}
+              style={{
+                background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
+                border: "none",
+                borderRadius: 12,
+                color: "#fff",
+                padding: "10px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              ✦ Generate First Signal
+            </button>
+          )}
         </div>
       </div>
-
-      {/* Recent + Donut */}
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <div
           style={{
@@ -1637,6 +1715,7 @@ function JournalPage({
   const [filter, setFilter] = useState<FilterType>("All");
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<Trade | null | "new">(null);
+  const [page, setPage] = useState(1);
   const isMobile = useIsMobile();
 
   const filtered = trades.filter((t) => {
@@ -1646,19 +1725,42 @@ function JournalPage({
     return true;
   });
 
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const handleSave = async (form: TradeFormData) => {
     const pnl = Number(form.pnl);
     const status: "Win" | "Loss" = pnl >= 0 ? "Win" : "Loss";
     const qty = parseFloat(String(form.qty)) || 0.01;
-    if (form.id) {
-      await onUpdate(form.id, { ...form, qty, pnl, status } as Partial<Trade>);
-    } else {
-      await onAdd({ ...form, qty, pnl, status } as Omit<
-        Trade,
-        "id" | "created_at"
-      >);
+    try {
+      if (form.id) {
+        await onUpdate(form.id, {
+          ...form,
+          qty,
+          pnl,
+          status,
+        } as Partial<Trade>);
+        toast("Trade updated!", "success");
+      } else {
+        await onAdd({ ...form, qty, pnl, status } as Omit<
+          Trade,
+          "id" | "created_at"
+        >);
+        toast("Trade added!", "success");
+      }
+    } catch {
+      toast("Failed to save trade.", "error");
     }
     setModal(null);
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await onDelete(id);
+      toast("Trade deleted.", "info");
+    } catch {
+      toast("Failed to delete trade.", "error");
+    }
   };
 
   const btnStyle = (active: boolean): CSSProperties => ({
@@ -1690,7 +1792,10 @@ function JournalPage({
             <button
               key={f}
               style={btnStyle(filter === f)}
-              onClick={() => setFilter(f)}
+              onClick={() => {
+                setFilter(f);
+                setPage(1);
+              }}
             >
               {f}
             </button>
@@ -1700,7 +1805,10 @@ function JournalPage({
           {!isMobile && (
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search symbol…"
               style={{
                 background: C.card,
@@ -1736,7 +1844,10 @@ function JournalPage({
       {isMobile && (
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
           placeholder="Search symbol…"
           style={{
             background: C.card,
@@ -1792,15 +1903,15 @@ function JournalPage({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => (
+              {paginated.map((t) => (
                 <TradeRow
                   key={t.id}
                   trade={t}
                   onEdit={(tr) => setModal(tr)}
-                  onDelete={onDelete}
+                  onDelete={handleDelete}
                 />
               ))}
-              {filtered.length === 0 && (
+              {paginated.length === 0 && (
                 <tr>
                   <td
                     colSpan={12}
@@ -1815,6 +1926,75 @@ function JournalPage({
         </div>
       </div>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 8,
+            marginTop: 16,
+          }}
+        >
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            style={{
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              color: page === 1 ? C.muted : C.text,
+              padding: "6px 14px",
+              cursor: page === 1 ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+              fontSize: 13,
+            }}
+          >
+            ←
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPage(p)}
+              style={{
+                background: page === p ? C.primary : C.card,
+                border: `1px solid ${page === p ? C.primary : C.border}`,
+                borderRadius: 8,
+                color: page === p ? "#fff" : C.text,
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: 13,
+                fontWeight: page === p ? 700 : 400,
+              }}
+            >
+              {p}
+            </button>
+          ))}
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            style={{
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              color: page === totalPages ? C.muted : C.text,
+              padding: "6px 14px",
+              cursor: page === totalPages ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+              fontSize: 13,
+            }}
+          >
+            →
+          </button>
+          <span style={{ color: C.muted, fontSize: 12 }}>
+            Showing {(page - 1) * PAGE_SIZE + 1}–
+            {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+        </div>
+      )}
+
       {modal !== null && (
         <TradeModal
           trade={modal === "new" ? null : modal}
@@ -1827,7 +2007,11 @@ function JournalPage({
 }
 
 // ─── AI Page ──────────────────────────────────────────────────────────────────
-function AIPage() {
+function AIPage({
+  onSignalGenerated,
+}: {
+  onSignalGenerated: (signal: AIResult) => void;
+}) {
   const [method, setMethod] = useState<MethodType>("scalping");
   const [pair, setPair] = useState("XAUUSD");
   const [tf, setTf] = useState("15m");
@@ -1863,12 +2047,16 @@ function AIPage() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setResult(data);
+      const signal = { ...data, method };
+      setResult(signal);
+      onSignalGenerated(signal); // update dashboard
       await incrementUsage();
+      toast("Signal generated!", "success");
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to generate signal.",
-      );
+      const msg =
+        err instanceof Error ? err.message : "Failed to generate signal.";
+      setError(msg);
+      toast(msg, "error");
     }
     setLoading(false);
   };
@@ -1888,7 +2076,6 @@ function AIPage() {
 
   return (
     <div style={{ padding: 24, display: "flex", gap: 24, flexWrap: "wrap" }}>
-      {/* Left */}
       <div
         style={{
           flex: 2,
@@ -1899,7 +2086,6 @@ function AIPage() {
         }}
       >
         <div style={{ ...glass, borderRadius: 16, padding: 20 }}>
-          {/* Method */}
           <div
             style={{
               color: C.muted,
@@ -1940,8 +2126,6 @@ function AIPage() {
               </button>
             ))}
           </div>
-
-          {/* Market */}
           <div
             style={{
               color: C.muted,
@@ -2007,8 +2191,6 @@ function AIPage() {
               </select>
             </div>
           </div>
-
-          {/* Disclaimer */}
           <div
             style={{
               background: "rgba(251,191,36,0.08)",
@@ -2024,7 +2206,6 @@ function AIPage() {
             ⚠️ AI signals are for educational purposes only. Always do your own
             analysis. Trading involves risk of loss.
           </div>
-
           {isLocked && (
             <div
               style={{
@@ -2050,7 +2231,6 @@ function AIPage() {
               </div>
             </div>
           )}
-
           <button
             onClick={generate}
             disabled={loading || isLocked}
@@ -2079,7 +2259,6 @@ function AIPage() {
           </button>
         </div>
 
-        {/* Loading skeleton */}
         {loading && (
           <div
             style={{
@@ -2109,7 +2288,6 @@ function AIPage() {
           </div>
         )}
 
-        {/* Result */}
         {result && !loading && (
           <div style={{ ...glass, borderRadius: 16, padding: 24 }}>
             <div
@@ -2148,8 +2326,6 @@ function AIPage() {
                 </span>
               </div>
             </div>
-
-            {/* Bias */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ color: C.muted, fontSize: 11, marginBottom: 4 }}>
                 Signal
@@ -2165,8 +2341,6 @@ function AIPage() {
                 {result.bias?.toUpperCase()}
               </div>
             </div>
-
-            {/* Levels */}
             <div
               style={{
                 display: "grid",
@@ -2202,8 +2376,6 @@ function AIPage() {
                 </div>
               ))}
             </div>
-
-            {/* Confidence + Current Price */}
             <div
               style={{
                 display: "flex",
@@ -2246,8 +2418,6 @@ function AIPage() {
                 </span>
               )}
             </div>
-
-            {/* Reason */}
             <div
               style={{
                 background: C.bg,
@@ -2261,8 +2431,6 @@ function AIPage() {
             >
               {result.reason}
             </div>
-
-            {/* Indicators */}
             {result.indicators && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {Object.entries(result.indicators).map(([k, v]) => (
@@ -2281,7 +2449,6 @@ function AIPage() {
                 ))}
               </div>
             )}
-
             {result.generated_at && (
               <div
                 style={{
@@ -2313,7 +2480,6 @@ function AIPage() {
         )}
       </div>
 
-      {/* Right Panel */}
       <div
         style={{
           flex: 1,
@@ -2334,7 +2500,7 @@ function AIPage() {
               [
                 "3",
                 "Generate",
-                "AI fetches 50 real candles, calculates EMA/RSI/ATR, then generates signal.",
+                "AI fetches 50 real candles, calculates EMA/RSI/ATR, then generates signal instantly.",
               ],
             ] as [string, string, string][]
           ).map(([n, t, d]) => (
@@ -2367,8 +2533,6 @@ function AIPage() {
             </div>
           ))}
         </div>
-
-        {/* Usage */}
         <div style={{ ...glass, borderRadius: 16, padding: 20 }}>
           <div
             style={{
@@ -2438,8 +2602,6 @@ function AIPage() {
             </div>
           ))}
         </div>
-
-        {/* Upgrade */}
         <div
           style={{
             background:
@@ -2570,14 +2732,31 @@ function WeeklyPage({ trades }: { trades: Trade[] }) {
 function SettingsPage({
   userEmail,
   userName,
+  userId,
   onSignOut,
 }: {
   userEmail: string;
   userName: string;
+  userId: string;
   onSignOut: () => void;
 }) {
   const [name, setName] = useState(userName);
-  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Update auth metadata
+      await supabase.auth.updateUser({ data: { name } });
+      // Update profiles table
+      await supabase.from("profiles").update({ name }).eq("id", userId);
+      toast("Profile saved!", "success");
+    } catch {
+      toast("Failed to save profile.", "error");
+    }
+    setSaving(false);
+  };
+
   const inp: CSSProperties = {
     background: C.bg,
     border: `1px solid ${C.border}`,
@@ -2622,6 +2801,7 @@ function SettingsPage({
               style={inp}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
             />
           </div>
           <div>
@@ -2642,10 +2822,8 @@ function SettingsPage({
             />
           </div>
           <button
-            onClick={() => {
-              setSaved(true);
-              setTimeout(() => setSaved(false), 2000);
-            }}
+            onClick={handleSave}
+            disabled={saving}
             style={{
               background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
               border: "none",
@@ -2654,11 +2832,12 @@ function SettingsPage({
               padding: 12,
               fontSize: 14,
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: saving ? "not-allowed" : "pointer",
               fontFamily: "inherit",
+              opacity: saving ? 0.7 : 1,
             }}
           >
-            {saved ? "✓ Saved!" : "Save Changes"}
+            {saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -2821,10 +3000,30 @@ export default function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
+  const [lastSignal, setLastSignal] = useState<AIResult | null>(null);
 
   useEffect(() => {
-    setCollapsed(isMobile ? true : false);
+    setCollapsed(isMobile);
   }, [isMobile]);
+
+  // Load last signal from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("tradeintel_last_signal");
+      if (saved) setLastSignal(JSON.parse(saved));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleSignalGenerated = (signal: AIResult) => {
+    setLastSignal(signal);
+    try {
+      localStorage.setItem("tradeintel_last_signal", JSON.stringify(signal));
+    } catch {
+      /* ignore */
+    }
+  };
 
   if (loading) return <LoadingScreen />;
   if (!user) return <Auth />;
@@ -2840,7 +3039,13 @@ export default function App() {
   const renderPage = (): ReactNode => {
     switch (page) {
       case "dashboard":
-        return <DashboardPage trades={trades} />;
+        return (
+          <DashboardPage
+            trades={trades}
+            lastSignal={lastSignal}
+            onNavigateAI={() => setPage("ai")}
+          />
+        );
       case "journal":
         return (
           <JournalPage
@@ -2851,7 +3056,7 @@ export default function App() {
           />
         );
       case "ai":
-        return <AIPage />;
+        return <AIPage onSignalGenerated={handleSignalGenerated} />;
       case "weekly":
         return <WeeklyPage trades={trades} />;
       case "settings":
@@ -2859,6 +3064,7 @@ export default function App() {
           <SettingsPage
             userEmail={userEmail}
             userName={userName}
+            userId={user.id}
             onSignOut={signOut}
           />
         );
@@ -2883,8 +3089,11 @@ export default function App() {
         button { font-family: inherit; }
         select option { background: #111827; color: #E5E7EB; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
         input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1); }
       `}</style>
+
+      <ToastContainer />
 
       <Sidebar
         page={page}
