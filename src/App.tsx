@@ -82,7 +82,6 @@ let globalToast: ToastFn = () => {};
 
 function ToastContainer() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-
   const addToast = useCallback<ToastFn>((message, type = "info") => {
     const id = ++toastId;
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -91,13 +90,10 @@ function ToastContainer() {
       3000,
     );
   }, []);
-
   useEffect(() => {
     globalToast = addToast;
   }, [addToast]);
-
   const colors = { success: C.success, error: C.danger, info: C.primary };
-
   return (
     <div
       style={{
@@ -431,7 +427,7 @@ function AIInsightCard({ insight }: { insight: AIResult }) {
   );
 }
 
-// ─── Trade Row ────────────────────────────────────────────────────────────────
+// ─── Trade Row (Desktop) ──────────────────────────────────────────────────────
 function TradeRow({
   trade,
   onEdit,
@@ -614,6 +610,152 @@ function TradeRow({
   );
 }
 
+// ─── Trade Card (Mobile) ──────────────────────────────────────────────────────
+function TradeCard({
+  trade,
+  onEdit,
+  onDelete,
+}: {
+  trade: Trade;
+  onEdit: (t: Trade) => void;
+  onDelete: (id: number) => void;
+}) {
+  const pnl = trade.pnl ?? 0;
+  return (
+    <div style={{ ...glass, borderRadius: 14, padding: 16 }}>
+      {/* Top */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>
+            {trade.pair}
+          </span>
+          <span
+            style={{
+              color: trade.side === "Buy" ? C.success : C.danger,
+              background:
+                trade.side === "Buy"
+                  ? "rgba(34,197,94,0.1)"
+                  : "rgba(239,68,68,0.1)",
+              borderRadius: 6,
+              padding: "2px 8px",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {trade.side}
+          </span>
+          <span
+            style={{
+              color: trade.status === "Win" ? C.success : C.danger,
+              background:
+                trade.status === "Win"
+                  ? "rgba(34,197,94,0.1)"
+                  : "rgba(239,68,68,0.1)",
+              borderRadius: 6,
+              padding: "2px 8px",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {trade.status}
+          </span>
+        </div>
+        <span
+          style={{
+            color: pnl >= 0 ? C.success : C.danger,
+            fontWeight: 800,
+            fontSize: 18,
+          }}
+        >
+          {pnl >= 0 ? "+" : ""}${Math.abs(pnl).toFixed(2)}
+        </span>
+      </div>
+
+      {/* Details */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        {[
+          ["Entry", trade.entry],
+          ["Exit", trade.exit],
+          ["Qty", trade.qty],
+          ["Fee", trade.fee > 0 ? `-$${trade.fee}` : "-"],
+          ["Swap", trade.swap > 0 ? `-$${trade.swap}` : "-"],
+          ["Close", trade.close_date?.slice(0, 10) || "-"],
+        ].map(([label, val]) => (
+          <div
+            key={String(label)}
+            style={{ background: C.bg, borderRadius: 8, padding: "6px 10px" }}
+          >
+            <div style={{ color: C.muted, fontSize: 10, marginBottom: 2 }}>
+              {label}
+            </div>
+            <div style={{ color: C.text, fontSize: 12, fontWeight: 600 }}>
+              {String(val)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Open date */}
+      <div style={{ color: C.muted, fontSize: 11, marginBottom: 10 }}>
+        📅 {trade.open_date?.slice(0, 16).replace("T", " ")} →{" "}
+        {trade.close_date?.slice(0, 16).replace("T", " ")}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={() => onEdit(trade)}
+          style={{
+            flex: 1,
+            background: "rgba(59,130,246,0.1)",
+            border: "1px solid rgba(59,130,246,0.2)",
+            borderRadius: 8,
+            color: C.primary,
+            cursor: "pointer",
+            padding: "8px",
+            fontSize: 13,
+            fontWeight: 600,
+            fontFamily: "inherit",
+          }}
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => onDelete(trade.id)}
+          style={{
+            flex: 1,
+            background: "rgba(239,68,68,0.1)",
+            border: "1px solid rgba(239,68,68,0.2)",
+            borderRadius: 8,
+            color: C.danger,
+            cursor: "pointer",
+            padding: "8px",
+            fontSize: 13,
+            fontWeight: 600,
+            fontFamily: "inherit",
+          }}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Trade Modal ──────────────────────────────────────────────────────────────
 function TradeModal({
   trade,
@@ -652,7 +794,6 @@ function TradeModal({
           pnl: 0,
         },
   );
-
   const set = <K extends keyof TradeFormData>(k: K, v: TradeFormData[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
   const inp: CSSProperties = {
@@ -688,10 +829,10 @@ function TradeModal({
           background: C.card,
           border: `1px solid ${C.border}`,
           borderRadius: 20,
-          padding: 32,
+          padding: 28,
           width: 520,
-          maxWidth: "90vw",
-          maxHeight: "90vh",
+          maxWidth: "94vw",
+          maxHeight: "92vh",
           overflowY: "auto",
         }}
       >
@@ -699,7 +840,7 @@ function TradeModal({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            marginBottom: 24,
+            marginBottom: 20,
           }}
         >
           <h3
@@ -722,7 +863,7 @@ function TradeModal({
           </button>
         </div>
         <div
-          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
         >
           <div>
             <label
@@ -884,9 +1025,9 @@ function TradeModal({
               placeholder="0.01"
               value={form.qty}
               onChange={(e) => {
-                const val = e.target.value;
-                if (val === "" || val === "." || /^\d*\.?\d*$/.test(val))
-                  set("qty", val as unknown as number);
+                const v = e.target.value;
+                if (v === "" || v === "." || /^\d*\.?\d*$/.test(v))
+                  set("qty", v as unknown as number);
               }}
             />
           </div>
@@ -942,9 +1083,7 @@ function TradeModal({
               }}
             >
               P&L ($){" "}
-              <span style={{ color: C.muted, fontSize: 10 }}>
-                — minus untuk loss
-              </span>
+              <span style={{ color: C.muted, fontSize: 10 }}>minus = loss</span>
             </label>
             <input
               style={{
@@ -996,7 +1135,7 @@ function TradeModal({
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+        <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
           <button
             onClick={onClose}
             style={{
@@ -1339,7 +1478,7 @@ function Topbar({
             fontFamily: "inherit",
           }}
         >
-          ✦ AI Analysis
+          ✦ AI
         </button>
         <div
           style={{
@@ -1413,8 +1552,6 @@ function DashboardPage({
     )
     .reduce((s, t) => s + (t.pnl ?? 0), 0);
   const perfData = buildPerfData(trades);
-
-  // Default AI card when no signal yet
   const defaultAI: AIResult = {
     bias: "buy",
     entry: "–",
@@ -1775,16 +1912,87 @@ function JournalPage({
     fontFamily: "inherit",
   });
 
+  const Pagination = () =>
+    totalPages > 1 ? (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={page === 1}
+          style={{
+            background: C.card,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            color: page === 1 ? C.muted : C.text,
+            padding: "6px 14px",
+            cursor: page === 1 ? "not-allowed" : "pointer",
+            fontFamily: "inherit",
+            fontSize: 13,
+          }}
+        >
+          ←
+        </button>
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPage(p)}
+            style={{
+              background: page === p ? C.primary : C.card,
+              border: `1px solid ${page === p ? C.primary : C.border}`,
+              borderRadius: 8,
+              color: page === p ? "#fff" : C.text,
+              padding: "6px 12px",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 13,
+              fontWeight: page === p ? 700 : 400,
+            }}
+          >
+            {p}
+          </button>
+        ))}
+        <button
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          disabled={page === totalPages}
+          style={{
+            background: C.card,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            color: page === totalPages ? C.muted : C.text,
+            padding: "6px 14px",
+            cursor: page === totalPages ? "not-allowed" : "pointer",
+            fontFamily: "inherit",
+            fontSize: 13,
+          }}
+        >
+          →
+        </button>
+        <span style={{ color: C.muted, fontSize: 11 }}>
+          {(page - 1) * PAGE_SIZE + 1}–
+          {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+        </span>
+      </div>
+    ) : null;
+
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
+      {/* Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 16,
+          marginBottom: 12,
           flexWrap: "wrap",
-          gap: 12,
+          gap: 10,
         }}
       >
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1801,198 +2009,140 @@ function JournalPage({
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          {!isMobile && (
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search symbol…"
-              style={{
-                background: C.card,
-                border: `1px solid ${C.border}`,
-                borderRadius: 10,
-                color: C.text,
-                padding: "8px 14px",
-                fontSize: 13,
-                outline: "none",
-                fontFamily: "inherit",
-              }}
-            />
-          )}
-          <button
-            onClick={() => setModal("new")}
-            style={{
-              background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-              border: "none",
-              borderRadius: 10,
-              color: "#fff",
-              padding: "8px 18px",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            + Add Trade
-          </button>
-        </div>
-      </div>
-
-      {isMobile && (
-        <input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Search symbol…"
+        <button
+          onClick={() => setModal("new")}
           style={{
-            background: C.card,
-            border: `1px solid ${C.border}`,
+            background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
+            border: "none",
             borderRadius: 10,
-            color: C.text,
-            padding: "8px 14px",
+            color: "#fff",
+            padding: "8px 18px",
             fontSize: 13,
-            outline: "none",
+            fontWeight: 700,
+            cursor: "pointer",
             fontFamily: "inherit",
-            width: "100%",
-            marginBottom: 12,
-            boxSizing: "border-box",
-          }}
-        />
-      )}
-
-      <div style={{ ...glass, borderRadius: 16, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <table
-            style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}
-          >
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {[
-                  "Symbol",
-                  "Side",
-                  "Open Date",
-                  "Close Date",
-                  "Entry",
-                  "Exit",
-                  "Qty",
-                  "Fee",
-                  "Swap",
-                  "P&L",
-                  "Status",
-                  "",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: "12px 10px",
-                      color: C.muted,
-                      fontWeight: 600,
-                      fontSize: 12,
-                      textAlign: "left",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map((t) => (
-                <TradeRow
-                  key={t.id}
-                  trade={t}
-                  onEdit={(tr) => setModal(tr)}
-                  onDelete={handleDelete}
-                />
-              ))}
-              {paginated.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={12}
-                    style={{ padding: 40, textAlign: "center", color: C.muted }}
-                  >
-                    No trades found. Add your first trade!
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 8,
-            marginTop: 16,
           }}
         >
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            style={{
-              background: C.card,
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
-              color: page === 1 ? C.muted : C.text,
-              padding: "6px 14px",
-              cursor: page === 1 ? "not-allowed" : "pointer",
-              fontFamily: "inherit",
-              fontSize: 13,
-            }}
-          >
-            ←
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPage(p)}
-              style={{
-                background: page === p ? C.primary : C.card,
-                border: `1px solid ${page === p ? C.primary : C.border}`,
-                borderRadius: 8,
-                color: page === p ? "#fff" : C.text,
-                padding: "6px 12px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 13,
-                fontWeight: page === p ? 700 : 400,
-              }}
-            >
-              {p}
-            </button>
-          ))}
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            style={{
-              background: C.card,
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
-              color: page === totalPages ? C.muted : C.text,
-              padding: "6px 14px",
-              cursor: page === totalPages ? "not-allowed" : "pointer",
-              fontFamily: "inherit",
-              fontSize: 13,
-            }}
-          >
-            →
-          </button>
-          <span style={{ color: C.muted, fontSize: 12 }}>
-            Showing {(page - 1) * PAGE_SIZE + 1}–
-            {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-          </span>
-        </div>
+          + Add Trade
+        </button>
+      </div>
+
+      {/* Search */}
+      <input
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setPage(1);
+        }}
+        placeholder="Search symbol…"
+        style={{
+          background: C.card,
+          border: `1px solid ${C.border}`,
+          borderRadius: 10,
+          color: C.text,
+          padding: "8px 14px",
+          fontSize: 13,
+          outline: "none",
+          fontFamily: "inherit",
+          width: "100%",
+          marginBottom: 14,
+          boxSizing: "border-box",
+        }}
+      />
+
+      {/* Mobile: Card list */}
+      {isMobile ? (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {paginated.map((t) => (
+              <TradeCard
+                key={t.id}
+                trade={t}
+                onEdit={(tr) => setModal(tr)}
+                onDelete={handleDelete}
+              />
+            ))}
+            {paginated.length === 0 && (
+              <div style={{ color: C.muted, textAlign: "center", padding: 40 }}>
+                No trades found. Add your first trade!
+              </div>
+            )}
+          </div>
+          <Pagination />
+        </>
+      ) : (
+        <>
+          {/* Desktop: Table */}
+          <div style={{ ...glass, borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  minWidth: 900,
+                }}
+              >
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {[
+                      "Symbol",
+                      "Side",
+                      "Open Date",
+                      "Close Date",
+                      "Entry",
+                      "Exit",
+                      "Qty",
+                      "Fee",
+                      "Swap",
+                      "P&L",
+                      "Status",
+                      "",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "12px 10px",
+                          color: C.muted,
+                          fontWeight: 600,
+                          fontSize: 12,
+                          textAlign: "left",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map((t) => (
+                    <TradeRow
+                      key={t.id}
+                      trade={t}
+                      onEdit={(tr) => setModal(tr)}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                  {paginated.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={12}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: C.muted,
+                        }}
+                      >
+                        No trades found. Add your first trade!
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <Pagination />
+        </>
       )}
 
       {modal !== null && (
@@ -2049,7 +2199,7 @@ function AIPage({
       if (data.error) throw new Error(data.error);
       const signal = { ...data, method };
       setResult(signal);
-      onSignalGenerated(signal); // update dashboard
+      onSignalGenerated(signal);
       await incrementUsage();
       toast("Signal generated!", "success");
     } catch (err: unknown) {
@@ -2500,7 +2650,7 @@ function AIPage({
               [
                 "3",
                 "Generate",
-                "AI fetches 50 real candles, calculates EMA/RSI/ATR, then generates signal instantly.",
+                "AI fetches 50 real candles, calculates EMA/RSI/ATR, generates signal instantly.",
               ],
             ] as [string, string, string][]
           ).map(([n, t, d]) => (
@@ -2746,9 +2896,7 @@ function SettingsPage({
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Update auth metadata
       await supabase.auth.updateUser({ data: { name } });
-      // Update profiles table
       await supabase.from("profiles").update({ name }).eq("id", userId);
       toast("Profile saved!", "success");
     } catch {
@@ -3006,7 +3154,6 @@ export default function App() {
     setCollapsed(isMobile);
   }, [isMobile]);
 
-  // Load last signal from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem("tradeintel_last_signal");
